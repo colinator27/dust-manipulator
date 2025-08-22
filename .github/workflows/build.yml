@@ -15,6 +15,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Download latest SDL_shadercross artifact
+      id: download-artifact
       uses: dawidd6/action-download-artifact@v11
       with:
         github_token: ${{secrets.GITHUB_TOKEN}}
