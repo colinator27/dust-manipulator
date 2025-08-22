@@ -26,14 +26,23 @@ jobs:
     - name: Build shaders
       shell: cmd
       run: |
-        dir
         7z x SDL3_shadercross-3.0.0-windows-VC-x64.zip
-        dir
         set PATH=%PATH%;%cd%/SDL3_shadercross-3.0.0-windows-VC-x64/bin/
         cd ./shaders/src/
         compile.bat
         cd ../../
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+    - uses: rust-build/rust-build.action@v1.4.5
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        RUSTTARGET: x86_64-pc-windows-gnu
+        EXTRA_FILES: "README.md LICENSE"
+        ARCHIVE_TYPES: zip
+        UPLOAD_MODE: none
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Dust Manipulator Windows x64
+        path: |
+          ${{ steps.compile.outputs.BUILT_ARCHIVE }}
+          ${{ steps.compile.outputs.BUILT_CHECKSUM }}
