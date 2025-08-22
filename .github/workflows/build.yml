@@ -11,42 +11,29 @@ env:
 
 jobs:
   build-windows:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
     - name: Download latest SDL_shadercross artifact
       id: download-artifact
       uses: dawidd6/action-download-artifact@v11
       with:
-        github_token: ${{secrets.GITHUB_TOKEN}}
+        github_token: ${{ secrets.GITHUB_TOKEN }}
         repo: colinator27/SDL_shadercross
         check_artifacts: true
-        name: SDL3_shadercross-linux-x64
+        name: SDL3_shadercross-VC-x64
         workflow: main.yml
     - name: Build shaders
-      shell: bash
+      shell: cmd
       run: |
-        ls -la
-        7z x SDL3_shadercross-3.0.0-linux-x64.tar.gz
-        7z x SDL3_shadercross-3.0.0-linux-x64.tar
-        ls -la
-        export PATH=$PATH:${PWD}/SDL3_shadercross-3.0.0-linux-x64/bin/
+        7z x SDL3_shadercross-3.0.0-windows-VC-x64.zip
+        set PATH=%PATH%;%cd%/SDL3_shadercross-3.0.0-windows-VC-x64/bin/
         cd ./shaders/src/
-        chmod +x compile.sh
-        ./compile.sh
+        compile.bat
         cd ../../
-    - uses: rust-build/rust-build.action@v1.4.5
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        RUSTTARGET: x86_64-pc-windows-gnu
-        EXTRA_FILES: "README.md LICENSE"
-        ARCHIVE_TYPES: zip
-        UPLOAD_MODE: none
-    - name: Upload artifact
+    - name: Build
+      run: cargo build --release
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: Dust Manipulator Windows x64
-        path: |
-          ${{ steps.compile.outputs.BUILT_ARCHIVE }}
-          ${{ steps.compile.outputs.BUILT_CHECKSUM }}
+        path: target/release/
