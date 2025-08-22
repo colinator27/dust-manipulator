@@ -1,0 +1,35 @@
+name: Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Download latest SDL_shadercross artifact
+      uses: dawidd6/action-download-artifact@v11
+      with:
+        github_token: ${{secrets.GITHUB_TOKEN}}
+        repo: colinator27/SDL_shadercross
+        check_artifacts: true
+        name: SDL3_shadercross-VC-x64
+    - name: Build shaders
+      shell: cmd
+      run: |
+        dir
+        set PATH=%PATH%;%cd%/SDL3_shadercross-3.0.0-windows-VC-x64/bin/
+        cd ./shaders/src/
+        compile.bat
+        cd ../../
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
