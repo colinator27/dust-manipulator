@@ -28,6 +28,7 @@ jobs:
       run: |
         ls -la
         7z x SDL3_shadercross-3.0.0-linux-x64.tar.gz
+        7z x SDL3_shadercross-3.0.0-linux-x64.tar
         ls -la
         export PATH=$PATH:${PWD}/SDL3_shadercross-3.0.0-linux-x64/bin/
         cd ./shaders/src/
