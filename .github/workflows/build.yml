@@ -27,7 +27,7 @@ jobs:
       shell: bash
       run: |
         ls -la
-        7z x SDL3_shadercross-3.0.0-windows-linux-x64.zip
+        7z x SDL3_shadercross-3.0.0-linux-x64.zip
         ls -la
         export PATH=$PATH:${PWD}/SDL3_shadercross-3.0.0-windows-linux-x64/bin/
         cd ./shaders/src/
