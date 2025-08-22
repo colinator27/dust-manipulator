@@ -22,6 +22,7 @@ jobs:
         repo: colinator27/SDL_shadercross
         check_artifacts: true
         name: SDL3_shadercross-VC-x64
+        workflow: main.yml
     - name: Build shaders
       shell: cmd
       run: |
