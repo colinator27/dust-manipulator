@@ -19,7 +19,7 @@ jobs:
       uses: dawidd6/action-download-artifact@v11
       with:
         github_token: ${{secrets.GITHUB_TOKEN}}
-        repo: libsdl-org/SDL_shadercross
+        repo: colinator27/SDL_shadercross
         check_artifacts: true
         name: SDL3_shadercross-linux-x64
         workflow: main.yml
@@ -27,7 +27,7 @@ jobs:
       shell: bash
       run: |
         ls -la
-        7z x SDL3_shadercross-3.0.0-linux-x64.zip
+        7z x SDL3_shadercross-3.0.0-linux-x64.tar.gz
         ls -la
         export PATH=$PATH:${PWD}/SDL3_shadercross-3.0.0-linux-x64/bin/
         cd ./shaders/src/
