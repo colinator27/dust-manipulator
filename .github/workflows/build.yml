@@ -11,7 +11,7 @@ env:
 
 jobs:
   build-windows:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - name: Download latest SDL_shadercross artifact
@@ -21,15 +21,18 @@ jobs:
         github_token: ${{secrets.GITHUB_TOKEN}}
         repo: libsdl-org/SDL_shadercross
         check_artifacts: true
-        name: SDL3_shadercross-VC-x64
+        name: SDL3_shadercross-linux-x64
         workflow: main.yml
     - name: Build shaders
-      shell: cmd
+      shell: bash
       run: |
-        7z x SDL3_shadercross-3.0.0-windows-VC-x64.zip
-        set PATH=%PATH%;%cd%/SDL3_shadercross-3.0.0-windows-VC-x64/bin/
+        la -la
+        7z x SDL3_shadercross-3.0.0-windows-linux-x64.zip
+        la -la
+        export PATH=$PATH:${PWD}/SDL3_shadercross-3.0.0-windows-linux-x64/bin/
         cd ./shaders/src/
-        compile.bat
+        chmod +x compile.sh
+        ./compile.sh
         cd ../../
     - uses: rust-build/rust-build.action@v1.4.5
       env:
