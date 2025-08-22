@@ -23,6 +23,7 @@ jobs:
         check_artifacts: true
         name: SDL3_shadercross-VC-x64
         workflow: main.yml
+        use_unzip: true
     - name: Build shaders
       shell: cmd
       run: |
