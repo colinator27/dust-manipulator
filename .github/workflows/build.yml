@@ -36,8 +36,8 @@ jobs:
     - name: Copy extra files
       shell: cmd
       run: |
-        copy LICENSE target/release/LICENSE
-        copy README.md target/release/README.md
+        copy LICENSE "./target/release/LICENSE"
+        copy README.md "./target/release/README.md"
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
