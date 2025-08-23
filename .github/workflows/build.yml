@@ -36,4 +36,12 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        path: target/release/
+        name: dust-manipulator-win-x64
+        path: |
+          target/release/dust-manipulator.exe
+          target/release/config.json
+          target/release/assets/
+          target/release/compiled_shaders/
+          LICENSE
+          README.md
+          
