@@ -33,6 +33,11 @@ jobs:
         cd ../../
     - name: Build
       run: cargo build --release
+    - name: Copy extra files
+      shell: cmd
+      run: |
+        copy LICENSE ./target/release/LICENSE
+        copy README.md ./target/release/README.md
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -42,6 +47,6 @@ jobs:
           target/release/config.json
           target/release/assets/
           target/release/compiled_shaders/
-          LICENSE
-          README.md
+          target/release/LICENSE
+          target/release/README.md
           
