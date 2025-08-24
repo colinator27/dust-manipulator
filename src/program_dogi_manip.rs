@@ -4,7 +4,7 @@ use defer_rs::defer;
 use sdl3::{event::Event, keyboard::Keycode, mouse::MouseButton, pixels::{Color, PixelFormat}, rect::Rect, render::{FPoint, ScaleMode, Texture}, surface::Surface};
 use sdl3_sys::pixels::SDL_PIXELFORMAT_RGBA32;
 
-use crate::{compute_shaders::PointU32, compute_snowball_search::{self, SnowballSearchParameters, SnowballSearchResult}, frame_images, program_common::{draw_circle, fpoint_camera_transform, window_set_focusable, window_to_world_f32, FrameTimer, ScreenSpace}, rng::{LinearPrecomputedRNG, LinearRNG, RNG}, server::MessageToSend, snowballs::{SnowArea, SNOWBALLS_ORIGIN_X, SNOWBALLS_ORIGIN_Y}, MainContext, SubProgram};
+use crate::{compute_shaders::PointU32, compute_snowball_search::{self, SnowballSearchParameters, SnowballSearchResult}, frame_images, platform_specific::show_tool_window_no_focus, program_common::{draw_circle, fpoint_camera_transform, window_set_focusable, window_to_world_f32, FrameTimer, ScreenSpace}, rng::{LinearPrecomputedRNG, LinearRNG, RNG}, server::MessageToSend, snowballs::{SnowArea, SNOWBALLS_ORIGIN_X, SNOWBALLS_ORIGIN_Y}, MainContext, SubProgram};
 
 #[derive(Clone)]
 struct PlacedSnowball {
@@ -286,6 +286,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                     if window.raise() {
                         main_context.sdl_context.mouse().warp_mouse_in_window(window, window.size().0 as f32 / 2.0, window.size().1 as f32 / 2.0);
                         window_set_focusable(window, false);
+                        show_tool_window_no_focus(window);
                     } else {
                         window_set_focusable(window, true);
                     }

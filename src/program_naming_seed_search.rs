@@ -3,7 +3,7 @@ use std::{sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex}, thread};
 use defer_rs::defer;
 use sdl3::{event::Event, keyboard::Keycode, mouse::MouseButton, pixels::Color, rect::{Point, Rect}};
 
-use crate::{compute_naming_search::{self, NamingSearchParameters, NamingSearchResult}, frame_images, program_common::{self, window_set_focusable, window_to_world, FrameTimer, ScreenSpace}, rng::RNG, server::MessageToSend, MainContext, SubProgram};
+use crate::{compute_naming_search::{self, NamingSearchParameters, NamingSearchResult}, frame_images, platform_specific::show_tool_window_no_focus, program_common::{self, window_set_focusable, window_to_world, FrameTimer, ScreenSpace}, rng::RNG, server::MessageToSend, MainContext, SubProgram};
 
 // Points on screen, such that if they aren't black, represents a random(0.5) that is definitely > 0.25
 // Ordered by letters A-Z then a-z, with Y offset coming first due to reverse order argument evaluation.
@@ -224,6 +224,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                     if window.raise() {
                         main_context.sdl_context.mouse().warp_mouse_in_window(window, window.size().0 as f32 / 2.0, window.size().1 as f32 / 2.0);
                         window_set_focusable(window, false);
+                        show_tool_window_no_focus(window);
                     } else {
                         window_set_focusable(window, true);
                     }
