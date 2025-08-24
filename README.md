@@ -6,8 +6,9 @@ Currently unfinished and experimental code with some of its programs, but is cur
 ## Install and setup instructions
 - Install the OBS plugin
     * You may need to update to a more recent version of OBS. As of writing, the minimum required is at least OBS 31.1.0.
-    * Download the ZIP from <https://github.com/colinator27/dust-manipulator-plugin/releases>, use your program of choice to copy the DLL (or .so on Linux) file contained within to your OBS plugins directory.
+    * Download the ZIP from <https://github.com/colinator27/dust-manipulator-plugin/releases>, use your program of choice to copy the DLL file contained within to your OBS plugins directory.
         - (On Windows, the plugin directory can be `C:\Program Files\obs-studio\obs-plugins\64bit`, but it may be different depending on how OBS was installed.)
+        - (On Linux, the plugin is built for Ubuntu primarily, and will have `.deb` files instead of `.dll`.)
 - Install the actual program
     * Download and extract the ZIP from <https://github.com/colinator27/dust-manipulator/releases>, to any location you want.
     * Optional: you can use a text editor to edit `config.json`. This contains:
