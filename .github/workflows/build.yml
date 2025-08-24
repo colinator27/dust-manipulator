@@ -49,4 +49,45 @@ jobs:
           target/release/compiled_shaders/
           target/release/LICENSE
           target/release/README.md
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Download latest SDL_shadercross artifact
+      id: download-artifact
+      uses: dawidd6/action-download-artifact@v11
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        repo: colinator27/SDL_shadercross
+        check_artifacts: true
+        name: SDL3_shadercross-linux-x64
+        workflow: main.yml
+    - name: Build shaders
+      shell: bash
+      run: |
+        7z x SDL3_shadercross-3.0.0-linux-x64.tar.gz
+        7z x SDL3_shadercross-3.0.0-linux-x64.tar
+        export PATH=$PATH:${PWD}/SDL3_shadercross-3.0.0-linux-x64/bin/
+        cd ./shaders/src/
+        chmod +x compile.sh
+        ./compile.sh
+        cd ../../
+    - name: Build
+      run: cargo build --release
+    - name: Copy extra files
+      shell: bash
+      run: |
+        cp LICENSE "./target/release/LICENSE"
+        cp README.md "./target/release/README.md"
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dust-manipulator-linux-x64
+        path: |
+          target/release/dust-manipulator
+          target/release/config.json
+          target/release/assets/
+          target/release/compiled_shaders/
+          target/release/LICENSE
+          target/release/README.md
           
