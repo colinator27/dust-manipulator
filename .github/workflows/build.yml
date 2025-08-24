@@ -90,6 +90,8 @@ jobs:
       run: |
         cp LICENSE "./target/release/LICENSE"
         cp README.md "./target/release/README.md"
+        rm "./target/release/config.json"
+        cp config-for-linux.json "./target/release/config.json"
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
