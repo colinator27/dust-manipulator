@@ -147,15 +147,6 @@ pub fn fpoint_camera_transform(fpoint: FPoint, camera_position: FPoint, camera_s
     FPoint::new((fpoint.x - camera_position.x) * camera_scale, (fpoint.y - camera_position.y) * camera_scale)
 }
 
-pub fn window_set_focusable(window: &mut Window, focusable: bool) -> bool {
-    let raw_window = window.raw();
-    if !raw_window.is_null() {
-        unsafe { SDL_SetWindowFocusable(raw_window, focusable) }
-    } else {
-        false
-    }
-}
-
 pub fn draw_circle(canvas: &mut Canvas<Window>, x: f32, y: f32, radius: f32, precision: u32, color: Color) {
     // Precision is rounded to a multiple of 4
     let precision = (precision / 4) << 2;

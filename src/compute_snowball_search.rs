@@ -17,6 +17,11 @@ pub struct SnowballSearchResult {
     pub match_count: u32,
     pub single_matched_position: u32
 }
+impl SnowballSearchResult {
+    pub fn new() -> Self {
+        SnowballSearchResult { match_count: 0, single_matched_position: 0 }
+    }
+}
 
 fn preload(snowball_data: &Vec<u8>) -> Result<SnowballComputeData, &'static str> {
     // Create device and pipelines based on shaders
@@ -134,6 +139,7 @@ pub struct SnowballSearchParameters {
 
 pub fn thread_func(start_rng: &impl LinearRNG, simulation_range: usize, 
                    end_thread: Arc<AtomicBool>, perform_search: Arc<AtomicBool>,
+                   preload_completed: Arc<AtomicBool>,
                    parameters: Arc<Mutex<SnowballSearchParameters>>,
                    output: Arc<Mutex<SnowballSearchResult>>) {
     println!("Snowball compute thread started");
@@ -147,6 +153,7 @@ pub fn thread_func(start_rng: &impl LinearRNG, simulation_range: usize,
     println!("Snowball GPU compute preload started");
     let mut snowball_data = preload(&snowball_simulation_data).expect("Failed to preload");
     drop(snowball_simulation_data);
+    preload_completed.store(true, Ordering::Relaxed);
     println!("Snowball GPU compute preload completed");
 
     loop {

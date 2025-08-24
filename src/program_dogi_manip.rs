@@ -4,7 +4,7 @@ use defer_rs::defer;
 use sdl3::{event::Event, keyboard::Keycode, mouse::MouseButton, pixels::{Color, PixelFormat}, rect::Rect, render::{FPoint, ScaleMode, Texture}, surface::Surface};
 use sdl3_sys::pixels::SDL_PIXELFORMAT_RGBA32;
 
-use crate::{compute_shaders::PointU32, compute_snowball_search::{self, SnowballSearchParameters, SnowballSearchResult}, frame_images, platform_specific::show_tool_window_no_focus, program_common::{draw_circle, fpoint_camera_transform, window_set_focusable, window_to_world_f32, FrameTimer, ScreenSpace}, rng::{LinearPrecomputedRNG, LinearRNG, RNG}, server::MessageToSend, snowballs::{SnowArea, SNOWBALLS_ORIGIN_X, SNOWBALLS_ORIGIN_Y}, MainContext, SubProgram};
+use crate::{compute_shaders::PointU32, compute_snowball_search::{self, SnowballSearchParameters, SnowballSearchResult}, frame_images, program_common::{draw_circle, fpoint_camera_transform, window_to_world_f32, FrameTimer, ScreenSpace}, rng::{LinearPrecomputedRNG, LinearRNG, RNG}, server::MessageToSend, snowballs::{SnowArea, SNOWBALLS_ORIGIN_X, SNOWBALLS_ORIGIN_Y}, windowing::{focus_game_window, window_set_focusable}, MainContext, SubProgram};
 
 #[derive(Clone)]
 struct PlacedSnowball {
@@ -57,17 +57,20 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
     let compute_end_signal_thread = compute_end_signal.clone();
     let compute_perform_search_signal = Arc::new(AtomicBool::new(false));
     let compute_perform_search_signal_thread = compute_perform_search_signal.clone();
+    let compute_preload_completed_signal = Arc::new(AtomicBool::new(false));
+    let compute_preload_completed_signal_thread = compute_preload_completed_signal.clone();
     let compute_parameters = Arc::new(Mutex::new(SnowballSearchParameters {
         search_range: 0,
         matching_snowballs: vec![]
     }));
     let compute_parameters_thread = compute_parameters.clone();
-    let compute_result = Arc::new(Mutex::new(SnowballSearchResult { match_count: 0, single_matched_position: 0 }));
+    let compute_result = Arc::new(Mutex::new(SnowballSearchResult::new()));
     let compute_result_thread = compute_result.clone();
     let compute_join_handle = thread::spawn(move || {
         compute_snowball_search::thread_func(&LinearPrecomputedRNG::new(&Arc::clone(&precomputed_rng_thread), 0), RANGE,
             Arc::clone(&compute_end_signal_thread), Arc::clone(&compute_perform_search_signal_thread), 
-            Arc::clone(&compute_parameters_thread), Arc::clone(&compute_result_thread));
+            Arc::clone(&compute_preload_completed_signal_thread), Arc::clone(&compute_parameters_thread), 
+            Arc::clone(&compute_result_thread));
     });
     defer! {
         // End compute thread
@@ -267,11 +270,36 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
             _ = main_context.font.draw_text(
                 main_context, 
                 instructions.as_str(), 
-                screen_space.x_world_to_screen(16.0), screen_space.y_world_to_screen(48.0),
+                screen_space.x_world_to_screen(16.0), screen_space.y_world_to_screen(128.0),
                 0.0, 0.0,
                 0, 
                 screen_space.scale() * 2.0, 
                 Color::RGB(255, 255, 255));
+        }
+
+        // Draw hotkeys
+        _ = main_context.font.draw_text_bg(
+            main_context, 
+            &format!("[{}] - Screenshot & raise\n[{}] - Focus window", 
+                          main_context.config.hotkey_1_name, main_context.config.hotkey_4_name), 
+            screen_space.x_world_to_screen(8.0), screen_space.y_world_to_screen(8.0),
+            0.0, 0.0,
+            0, 
+            screen_space.scale(), 
+            Color::RGB(255, 255, 255),
+            Color::RGBA(0, 0, 0, 128),
+            16.0);
+        
+        // Draw text if preloading is still happening
+        if !compute_preload_completed_signal.load(Ordering::Relaxed) {
+            _ = main_context.font.draw_text(
+                main_context, 
+                "Preloading snowball data...", 
+                screen_space.x_world_to_screen(8.0), screen_space.y_world_to_screen(WORLD_HEIGHT as f32 - 8.0),
+                0.0, 1.0,
+                0, 
+                screen_space.scale(), 
+                Color::RGB(128, 128, 128));
         }
 
         // Present latest canvas
@@ -283,18 +311,16 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 0 => {
                     // Screenshots
                     let window = main_context.canvas.window_mut();
-                    if window.raise() {
-                        main_context.sdl_context.mouse().warp_mouse_in_window(window, window.size().0 as f32 / 2.0, window.size().1 as f32 / 2.0);
-                        window_set_focusable(window, false);
-                        show_tool_window_no_focus(window);
-                    } else {
-                        window_set_focusable(window, true);
-                    }
+                    main_context.sdl_context.mouse().warp_mouse_in_window(window, window.size().0 as f32 / 2.0, window.size().1 as f32 / 2.0);
+                    window_set_focusable(window, false);
+                    window.sync();
+                    focus_game_window();
                 },
-                1 => {
-                    // Reset (TODO?)
+                3 => {
+                    // Focus window
                     let window = main_context.canvas.window_mut();
                     window_set_focusable(window, true);
+                    window.raise();
                 }
                 _ => {}
             }

@@ -3,7 +3,7 @@ use std::{sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex}, thread};
 use defer_rs::defer;
 use sdl3::{event::Event, keyboard::Keycode, mouse::MouseButton, pixels::Color, rect::{Point, Rect}};
 
-use crate::{compute_naming_search::{self, NamingSearchParameters, NamingSearchResult}, frame_images, platform_specific::show_tool_window_no_focus, program_common::{self, window_set_focusable, window_to_world, FrameTimer, ScreenSpace}, rng::RNG, server::MessageToSend, MainContext, SubProgram};
+use crate::{compute_naming_search::{self, NamingSearchParameters, NamingSearchResult}, frame_images, program_common::{self, window_to_world, FrameTimer, ScreenSpace}, rng::RNG, server::MessageToSend, windowing::{focus_game_window, window_set_focusable}, MainContext, SubProgram};
 
 // Points on screen, such that if they aren't black, represents a random(0.5) that is definitely > 0.25
 // Ordered by letters A-Z then a-z, with Y offset coming first due to reverse order argument evaluation.
@@ -124,6 +124,9 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
     let mut queued_search = false;
     let mut waiting_for_search_result = false;
 
+    // Whether RNG was just found by this tool or not
+    let mut rng_just_found = false;
+
     // State for mouse dragging
     let mut last_selected_toggle_result = true;
     
@@ -202,11 +205,9 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 // Set current RNG for the run
                 main_context.run_context.set_rng(search_result.single_matched_seed, search_result.single_matched_position as usize);
 
-                // Make window focusable again
-                window_set_focusable(main_context.canvas.window_mut(), true);
-
                 // Progress to next state
-                naming_search_state = NamingSearchState::Found;                
+                naming_search_state = NamingSearchState::Found;    
+                rng_just_found = true;            
             } else {
                 println!("Match count = {}, data1 = {}, data2 = {}", search_result.match_count, search_result.single_matched_seed, search_result.single_matched_position);
             }
@@ -221,22 +222,25 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 1 => {
                     // Raise window (and warp mouse) but make unfocusable
                     let window = main_context.canvas.window_mut();
-                    if window.raise() {
-                        main_context.sdl_context.mouse().warp_mouse_in_window(window, window.size().0 as f32 / 2.0, window.size().1 as f32 / 2.0);
-                        window_set_focusable(window, false);
-                        show_tool_window_no_focus(window);
-                    } else {
-                        window_set_focusable(window, true);
-                    }
+                    main_context.sdl_context.mouse().warp_mouse_in_window(window, window.size().0 as f32 / 2.0, window.size().1 as f32 / 2.0);
+                    window_set_focusable(window, false);
+                    window.sync();
+                    focus_game_window();
                 }
                 2 => {
-                    // Perform actual search
-                    queued_search = true;
+                    // Perform actual search, or if in found state, progress to next tool
+                    if rng_just_found {
+                        // TODO: somehow make this configurable so that this can be for dust manip instead?
+                        return SubProgram::DogiManip;
+                    } else {
+                        queued_search = true;
+                    }
                 }
                 3 => {
-                    // If in found state, progress to next tool
-                    // TODO: somehow make this configurable so that this can be for dust manip instead?
-                    return SubProgram::DogiManip;
+                    // Focus window
+                    let window = main_context.canvas.window_mut();
+                    window_set_focusable(window, true);
+                    window.raise();
                 }
                 _ => {}
             }
@@ -359,9 +363,11 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
         // Draw hotkeys
         _ = main_context.font.draw_text_bg(
             main_context, 
-            &format!("[{}] - Screenshot\n[{}] - Raise window\n[{}] - Begin search\n[{}] - Next tool", 
+            &format!("[{}] - Screenshot\n[{}] - Raise window\n[{}] - {}\n[{}] - Focus window", 
                           main_context.config.hotkey_1_name, main_context.config.hotkey_2_name, 
-                          main_context.config.hotkey_3_name, main_context.config.hotkey_4_name), 
+                          main_context.config.hotkey_3_name,
+                          if rng_just_found { "Progress to next tool" } else { "Begin search" },
+                          main_context.config.hotkey_4_name), 
             screen_space.x_world_to_screen(8.0), screen_space.y_world_to_screen(8.0),
             0.0, 0.0,
             0, 

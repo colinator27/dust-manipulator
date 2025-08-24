@@ -25,10 +25,11 @@ use std::thread;
 use rng::RNG;
 use dust::{DustAnimation, DustSearchConfig};
 
-use crate::program_common::{rect_from_texture, rect_to_frect, window_set_focusable, window_to_world, FrameTimer, ScreenSpace};
+use crate::windowing::window_set_focusable;
+use crate::program_common::{rect_from_texture, rect_to_frect, window_to_world, FrameTimer, ScreenSpace};
 use crate::rng::LinearRNG;
 use crate::server::MessageToSend;
-use crate::{compute_dust_search, compute_shaders, dust, encounter_data, frame_images, manip_data, platform_specific, program_common, rng, server, util, MainContext, SubProgram};
+use crate::{compute_dust_search, compute_shaders, dust, encounter_data, frame_images, manip_data, windowing, program_common, rng, server, util, MainContext, SubProgram};
 
 #[derive(Clone)]
 struct PlacedDustParticle {
@@ -461,7 +462,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                     if window_set_focusable(main_context.canvas.window_mut(), false) {
                         focus_window_buffer_time = Some(sdl3::timer::ticks() + 2000);
                     }
-                    platform_specific::focus_game_window();
+                    windowing::focus_game_window();
 
                     num_attacks = 1;
                     leveled_up = false;

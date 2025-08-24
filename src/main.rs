@@ -16,7 +16,7 @@ mod compute_dust_search;
 mod compute_naming_search;
 mod compute_snowball_search;
 mod frame_images;
-mod platform_specific;
+mod windowing;
 mod encounter_data;
 mod manip_data;
 mod util;
@@ -64,6 +64,9 @@ impl RunContext {
         self.rng_found = false;
         self.rng_seed = 0;
         self.min_rng_position = 0;
+    }
+    pub fn rng_found(&self) -> bool {
+        self.rng_found
     }
 }
 
