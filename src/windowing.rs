@@ -1,5 +1,5 @@
 use sdl3::{sys::{properties::{SDL_CreateProperties, SDL_DestroyProperties, SDL_SetPointerProperty}, video::{SDL_CreateWindowWithProperties, SDL_DestroyWindow, SDL_RaiseWindow, SDL_PROP_WINDOW_CREATE_WIN32_HWND_POINTER}}, video::Window};
-use sdl3_sys::{properties::SDL_GetPointerProperty, video::{SDL_GetWindowProperties, SDL_SetWindowFocusable, SDL_PROP_WINDOW_WIN32_HWND_POINTER}};
+use sdl3_sys::{properties::SDL_GetPointerProperty, video::{SDL_GetWindowProperties, SDL_PROP_WINDOW_WIN32_HWND_POINTER, SDL_SetWindowAlwaysOnTop, SDL_SetWindowFocusable}};
 use windows_sys::Win32::UI::WindowsAndMessaging::{GetWindowLongPtrA, SetWindowLongPtrA, GWL_EXSTYLE, WS_EX_APPWINDOW, WS_EX_TOPMOST};
 
 pub fn focus_game_window() {
@@ -43,6 +43,16 @@ pub fn window_set_focusable(window: &mut Window, focusable: bool) -> bool {
             }
         }
 
+        main_result
+    } else {
+        false
+    }
+}
+
+pub fn window_set_always_on_top(window: &mut Window, always_on_top: bool) -> bool {
+    let raw_window = window.raw();
+    if !raw_window.is_null() {
+        let main_result = unsafe { SDL_SetWindowAlwaysOnTop(raw_window, always_on_top) };
         main_result
     } else {
         false

@@ -6,6 +6,8 @@
     "hotkey_3_name": "F3",
     "hotkey_4_name": "F5",
     "mouse_warps": true,
+    "window_always_on_top": false,
+    "window_opacity": 1,
     "snowball_immediate_place": false,
     "naming_advance_tool": "DogiManip",
     "naming_auto_advance_seconds": 3,

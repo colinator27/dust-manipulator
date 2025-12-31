@@ -14,7 +14,7 @@ use sdl3_sys::{init::SDL_IsMainThread, messagebox::{SDL_MESSAGEBOX_ERROR, SDL_Sh
 use server::{MessageToSend, ScreenshotData};
 use text_rendering::Font;
 
-use crate::program_common::SubProgram;
+use crate::{program_common::SubProgram, windowing::window_set_always_on_top};
 
 extern crate sdl3;
 
@@ -266,7 +266,7 @@ fn main() {
     }
 
     // Start window and graphics for GUI
-    let window = video_subsystem.window("Dust Manipulator", default_width, default_height)
+    let mut window = video_subsystem.window("Dust Manipulator", default_width, default_height)
         .position_centered()
         .resizable()
         .hidden()
@@ -274,6 +274,16 @@ fn main() {
         .expect("Failed to create window");
     if let Ok(mut panic_parameters) = panic_parameters.lock() {
         panic_parameters.error_window = window.raw();
+    }
+    if config.window_always_on_top {
+        if !window_set_always_on_top(&mut window, true) {
+            println!("Failed to set window to be always on top");
+        }
+    }
+    if config.window_opacity != 1.0 {
+        if let Err(e) = window.set_opacity(config.window_opacity) {
+            println!("Failed to set window opacity: {}", e);
+        }
     }
     let mut canvas = window.into_canvas();
     let texture_creator = canvas.texture_creator();

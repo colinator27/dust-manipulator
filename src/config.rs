@@ -72,6 +72,8 @@ pub struct Config {
     pub hotkey_3_name: String,
     pub hotkey_4_name: String,
     pub mouse_warps: bool,
+    pub window_always_on_top: bool,
+    pub window_opacity: f32,
     pub snowball_immediate_place: bool,
     pub naming_advance_tool: SubProgram,
     pub naming_auto_advance_seconds: u32,
