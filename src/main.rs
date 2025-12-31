@@ -7,9 +7,10 @@
   windows_subsystem = "windows"
 )]
 
-use std::{sync::{atomic::{AtomicBool, Ordering}, mpsc::{self, Receiver, Sender}, Arc, Mutex}, thread};
+use std::{ffi::CString, panic, ptr, sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}, mpsc::{self, Receiver, Sender}}, thread};
 use config::Config;
 use sdl3::{render::{Canvas, TextureCreator}, video::{Window, WindowContext}, Sdl};
+use sdl3_sys::{init::SDL_IsMainThread, messagebox::{SDL_MESSAGEBOX_ERROR, SDL_ShowSimpleMessageBox}, video::SDL_Window};
 use server::{MessageToSend, ScreenshotData};
 use text_rendering::Font;
 
@@ -91,6 +92,9 @@ pub struct MainContext<'a> {
     pub texture_creator: &'a TextureCreator<WindowContext>,
     pub window_shown: bool,
 
+    // Panic handling
+    pub panic_occurred: Arc<AtomicBool>,
+
     // Server communication
     pub hotkey_receiver: &'a Receiver<u32>,
     pub message_to_send_sender: &'a Sender<MessageToSend>,
@@ -127,7 +131,103 @@ pub enum SubProgram {
     RNGOverride
 }
 
+struct PanicParameters {
+    error_window: *mut SDL_Window,
+    thread_error_payload_str: Option<String>,
+    dump_path_str: String
+}
+unsafe impl Send for PanicParameters {}
+
+fn attempt_show_thread_panic(panic_parameters: &PanicParameters) {
+    let Ok(title) = CString::new("Error") else { return };
+    let message = if let Some(payload_str) = &panic_parameters.thread_error_payload_str {
+        CString::new(format!("A fatal error has occurred in the tool. The error message is below:\n\n{}\n\nFor more details, a report file was placed at: {}", payload_str, panic_parameters.dump_path_str))
+    } else {
+        CString::new(format!("A fatal error has occurred in the tool. No error message was able to be retrieved.\n\nFor more details, a report file was placed at: {}", panic_parameters.dump_path_str))
+    };
+    let Ok(message) = message else { return };
+    unsafe { SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title.as_ptr(), message.as_ptr(), panic_parameters.error_window) };
+}
+
+fn remove_info_from_path(path: String) -> String {
+    if cfg!(windows) {
+        // Hide username for privacy reasons (at least in obvious cases), just in case it's needed for some reason...
+        if path.len() < 4 {
+            return path;
+        }
+        let Some(first_char) = path.chars().nth(0) else { return path };
+        if first_char < 'A' || first_char > 'Z' {
+            return path;
+        }
+        if path.chars().nth(1) != Some(':') {
+            return path;
+        }
+        if !path[1..].starts_with(":\\Users\\") {
+            return path;
+        }
+        let mut end_username_index = 0;
+        for c in path.char_indices().skip("C:\\Users\\".len()) {
+            if c.1 == '\\' {
+                end_username_index = c.0;
+                break;
+            }
+        }
+        if end_username_index == 0 {
+            return path;
+        }
+        path[0..("C:\\Users\\".len())].to_string() + "<username>" + &path[end_username_index..]
+    } else {
+        path
+    }
+}
+
 fn main() {
+    // Handle panics somewhat gracefully
+    let existing_hook = panic::take_hook();
+    let panic_parameters = Arc::new(Mutex::new(PanicParameters {
+        error_window: ptr::null_mut(),
+        thread_error_payload_str: None,
+        dump_path_str: "(failed to get file path)".to_string()
+    }));
+    let panic_occurred = Arc::new(AtomicBool::new(false));
+    let panic_parameters_callback = panic_parameters.clone();
+    let panic_occurred_callback = panic_occurred.clone();
+    panic::set_hook(Box::new(move |info| {
+        // Dump information to temp file
+        let dump_path = human_panic::handle_dump(&human_panic::Metadata::new("Dust Manipulator", env!("CARGO_PKG_VERSION")), info);
+        let mut dump_path_str: String = "(failed to write file)".to_string();
+        if let Some(dump_path) = dump_path {
+            dump_path_str = dump_path.to_str().unwrap_or("(failed to get file path)").to_string();
+        }
+        dump_path_str = remove_info_from_path(dump_path_str);
+
+        // Show error message window, if possible (and if none shown already)
+        if unsafe { SDL_IsMainThread() } {
+            if !panic_occurred_callback.load(Ordering::Relaxed) {
+                let Ok(title) = CString::new("Error") else { return };
+                let message = if let Some(payload_str) = info.payload_as_str() {
+                    CString::new(format!("A fatal error has occurred in the tool. The error message is below:\n\n{}\n\nFor more details, a report file was placed at: {}", payload_str, dump_path_str))
+                } else {
+                    CString::new(format!("A fatal error has occurred in the tool. No error message was able to be retrieved.\n\nFor more details, a report file was placed at: {}", dump_path_str))
+                };
+                let Ok(message) = message else { return };
+                let Ok(params) = panic_parameters_callback.lock() else { return };
+                unsafe { SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title.as_ptr(), message.as_ptr(), params.error_window) };
+            }
+        } else if let Ok(mut params) = panic_parameters_callback.lock() {
+            if let Some(payload_str) = info.payload_as_str() {
+                params.thread_error_payload_str = Some(payload_str.to_string());
+            }
+            params.dump_path_str = dump_path_str;
+        }
+
+        // Mark that a panic has occurred (particularly if this happened on a thread)
+        panic_occurred_callback.store(true, Ordering::Relaxed);
+
+        // Call pre-existing hook
+        existing_hook(info);
+    }));
+
     // Load config
     let config = Config::read().expect("Failed to load config");
 
@@ -181,6 +281,9 @@ fn main() {
         .hidden()
         .build()
         .expect("Failed to create window");
+    if let Ok(mut panic_parameters) = panic_parameters.lock() {
+        panic_parameters.error_window = window.raw();
+    }
     let mut canvas = window.into_canvas();
     let texture_creator = canvas.texture_creator();
 
@@ -192,6 +295,7 @@ fn main() {
         canvas: &mut canvas,
         texture_creator: &texture_creator,
         window_shown: false,
+        panic_occurred,
         hotkey_receiver: &hotkey_receiver,
         message_to_send_sender: &message_to_send_sender,
         server_connected,
@@ -214,9 +318,27 @@ fn main() {
         }
     }
 
+    // Show message if a thread panicked
+    let mut shown_thread_panic = false;
+    if let Ok(panic_parameters) = panic_parameters.lock() {
+        if main_context.panic_occurred.load(Ordering::Relaxed) {
+            attempt_show_thread_panic(&panic_parameters);
+            shown_thread_panic = true;
+        }
+    }
+
     // Close server
     server_end_signal.store(true, Ordering::Relaxed);
     server_join_handle.join().expect("Failed to join server thread");
+
+    // Unregister window from panic handling
+    if let Ok(mut panic_parameters) = panic_parameters.lock() {
+        // But... if a thread panicked at the last moment, show its error too... (if not already shown)
+        if !shown_thread_panic && main_context.panic_occurred.load(Ordering::Relaxed) {
+            attempt_show_thread_panic(&panic_parameters);
+        }
+        panic_parameters.error_window = ptr::null_mut();
+    }
 
     println!("Finished!");
 }

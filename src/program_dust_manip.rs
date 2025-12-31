@@ -240,6 +240,11 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
     world_texture.set_scale_mode(sdl3::render::ScaleMode::Nearest);
     let mut event_pump = main_context.sdl_context.event_pump().unwrap();
     'running: loop {
+        // Handle thread errors
+        if main_context.panic_occurred.load(Ordering::Relaxed) {
+            break;
+        }
+        
         let frame_timer = FrameTimer::start(30);
         let screen_space = ScreenSpace::new(&main_context);
 

@@ -1,3 +1,5 @@
+use std::sync::atomic::Ordering;
+
 use sdl3::{event::Event, keyboard::Keycode, pixels::Color, rect::{Point, Rect}, render::{ScaleMode, Texture}};
 
 use crate::{program_common::{rect_from_texture, FrameTimer, ScreenSpace}, MainContext, SubProgram};
@@ -46,6 +48,12 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
 
     let mut event_pump = main_context.sdl_context.event_pump().unwrap();
     'running: loop {
+        // Handle thread errors
+        if main_context.panic_occurred.load(Ordering::Relaxed) {
+            chosen_program = SubProgram::None;
+            break;
+        }
+        
         let frame_timer = FrameTimer::start(30);
         let screen_space = ScreenSpace::new(&main_context);
 
