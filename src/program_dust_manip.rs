@@ -11,7 +11,6 @@ use sdl3::pixels::PixelFormat;
 use sdl3::rect::{Point, Rect};
 use sdl3::render::{Canvas, FRect, ScaleMode, Texture, TextureCreator};
 use sdl3::surface::Surface;
-use sdl3::sys::pixels::SDL_PIXELFORMAT_RGBA32;
 use sdl3::video::{Window, WindowContext};
 use sdl3::pixels::Color;
 use sdl3::event::Event;
@@ -103,8 +102,8 @@ fn get_new_screenshot<'a>(texture_creator: &'a TextureCreator<WindowContext>, sc
     });
     
     // Create texture
-    let surface = Surface::from_data(&mut cleaned_data, world_view.w as u32, world_view.h as u32, world_view.w as u32 * 4, 
-                                                  PixelFormat::from(SDL_PIXELFORMAT_RGBA32.0 as i64)).unwrap();
+    let surface = Surface::from_data(&mut cleaned_data, 
+        world_view.w as u32, world_view.h as u32, world_view.w as u32 * 4, PixelFormat::RGBA32).unwrap();
     let mut texture = Texture::from_surface(&surface, &texture_creator).unwrap();
     texture.set_scale_mode(ScaleMode::Nearest);
     texture
@@ -642,8 +641,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                                               first_screenshot_data, second_screenshot_data, 
                                               &context.search_config.four_pixel_config);
                 let surface = Surface::from_data(&mut output_image, 
-                                                              dust_search_frame_pair_image.width(), dust_search_frame_pair_image.height(), dust_search_frame_pair_image.width() * 4, 
-                                                              PixelFormat::from(SDL_PIXELFORMAT_RGBA32.0 as i64)).unwrap();
+                    dust_search_frame_pair_image.width(), dust_search_frame_pair_image.height(), dust_search_frame_pair_image.width() * 4, PixelFormat::RGBA32).unwrap();
                 let mut texture = Texture::from_surface(&surface, &main_context.texture_creator).unwrap();
                 texture.set_scale_mode(ScaleMode::Nearest);
                 drop(surface);

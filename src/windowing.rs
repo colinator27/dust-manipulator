@@ -1,6 +1,6 @@
 use sdl3::{sys::{properties::{SDL_CreateProperties, SDL_DestroyProperties, SDL_SetPointerProperty}, video::{SDL_CreateWindowWithProperties, SDL_DestroyWindow, SDL_RaiseWindow, SDL_PROP_WINDOW_CREATE_WIN32_HWND_POINTER}}, video::Window};
-use sdl3_sys::{properties::SDL_GetPointerProperty, video::{SDL_GetWindowProperties, SDL_SetWindowFocusable, SDL_PROP_WINDOW_WIN32_HWND_POINTER, SDL_WINDOW_NOT_FOCUSABLE}};
-use windows_sys::Win32::UI::WindowsAndMessaging::{GetWindowLongPtrA, SetWindowLongPtrA, ShowWindow, GWL_EXSTYLE, SW_HIDE, SW_SHOWNOACTIVATE, WS_EX_APPWINDOW, WS_EX_NOACTIVATE, WS_EX_TOPMOST};
+use sdl3_sys::{properties::SDL_GetPointerProperty, video::{SDL_GetWindowProperties, SDL_SetWindowFocusable, SDL_PROP_WINDOW_WIN32_HWND_POINTER}};
+use windows_sys::Win32::UI::WindowsAndMessaging::{GetWindowLongPtrA, SetWindowLongPtrA, GWL_EXSTYLE, WS_EX_APPWINDOW, WS_EX_TOPMOST};
 
 pub fn focus_game_window() {
     if cfg!(windows) {

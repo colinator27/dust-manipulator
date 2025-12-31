@@ -1,9 +1,9 @@
 use std::{sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex}, thread};
 
 use defer_rs::defer;
-use sdl3::{event::Event, keyboard::Keycode, mouse::MouseButton, pixels::Color, rect::{Point, Rect}};
+use sdl3::{event::Event, keyboard::Keycode, mouse::MouseButton, pixels::{Color, PixelFormat}, rect::{Point, Rect}, render::{BlendMode, ScaleMode, Texture}, surface::Surface};
 
-use crate::{compute_naming_search::{self, NamingSearchParameters, NamingSearchResult}, frame_images, program_common::{self, window_to_world, FrameTimer, ScreenSpace}, rng::RNG, server::MessageToSend, windowing::{focus_game_window, window_set_focusable}, MainContext, SubProgram};
+use crate::{compute_naming_search::{self, NamingSearchParameters, NamingSearchResult}, program_common::{self, window_to_world, FrameTimer, ScreenSpace}, rng::RNG, server::MessageToSend, windowing::{focus_game_window, window_set_focusable}, MainContext, SubProgram};
 
 // Points on screen, such that if they aren't black, represents a random(0.5) that is definitely > 0.25
 // Ordered by letters A-Z then a-z, with Y offset coming first due to reverse order argument evaluation.
@@ -15,7 +15,7 @@ const LETTER_DATA: [(i32, i32); 104] = [
     (378, 176), (388, 159), // E
     (442, 176), (452, 159), // F
     (508, 176), (516, 172), // G
-    (122, 204), (124, 200), // H
+    (122, 204), (132, 200), // H
     (186, 204), (196, 187), // I
     (252, 204), (260, 196), // J
     (314, 204), (324, 202), // K
@@ -53,7 +53,7 @@ const LETTER_DATA: [(i32, i32); 104] = [
     (258, 358), (260, 348), // q
     (314, 352), (324, 342), // r
     (380, 352), (388, 348), // s
-    (448, 352), (452, 351), // t
+    (448, 352), (452, 339), // t
     (508, 352), (516, 347), // u
     (126, 380), (132, 370), // v
     (188, 380), (198, 372), // w
@@ -64,7 +64,6 @@ const LETTER_DATA: [(i32, i32); 104] = [
 
 struct NamingPixel {
     pub rect: Rect,
-    pub color: Color,
     pub hovered: bool,
     pub selected: bool
 }
@@ -83,6 +82,18 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
     // Current program state
     let mut naming_search_state = NamingSearchState::Waiting;
     let mut naming_pixels: Vec<NamingPixel> = Vec::with_capacity(LETTER_DATA.len());
+    for pos in LETTER_DATA {
+        naming_pixels.push(NamingPixel {
+            rect: Rect::new(pos.0 - 3, pos.1 - 3, 7, 7),
+            hovered: false,
+            selected: false
+        });
+    }
+    let mut naming_rect_index = 0;
+    let mut naming_rect = &main_context.config.naming_rects[naming_rect_index];
+    let mut naming_rect_zoom = Rect::new(naming_rect.zoom.x as i32, naming_rect.zoom.y as i32, naming_rect.zoom.w, naming_rect.zoom.h);
+    let mut naming_rect_crop = Rect::new(naming_rect.crop.x as i32, naming_rect.crop.y as i32, naming_rect.crop.w, naming_rect.crop.h);
+    let naming_rect_count = main_context.config.naming_rects.len();
 
     // Last server connected state
     let mut last_server_connected = main_context.server_connected.load(Ordering::Relaxed);
@@ -129,12 +140,15 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
 
     // State for mouse dragging
     let mut last_selected_toggle_result = true;
+
+    // Screenshot for naming screen to be displayed
+    let mut screenshot_texture: Option<Texture> = None;
     
-    // Make world texture
-    let mut world_texture = main_context.texture_creator
-        .create_texture_target(main_context.texture_creator.default_pixel_format(), WORLD_WIDTH, WORLD_HEIGHT)
+    // Make overlay texture
+    let mut overlay_texture = main_context.texture_creator
+        .create_texture_target(PixelFormat::RGBA32, WORLD_WIDTH, WORLD_HEIGHT)
         .expect("Failed to create texture target");
-    world_texture.set_scale_mode(sdl3::render::ScaleMode::Nearest);
+    overlay_texture.set_scale_mode(sdl3::render::ScaleMode::Nearest);
     
     // Start main loop
     let mut event_pump = main_context.sdl_context.event_pump().unwrap();
@@ -156,8 +170,11 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 Event::MouseMotion { x, y, mousestate, .. } => {
                     match naming_search_state {
                         NamingSearchState::ClickingPixels => {
-                            let (selector_x, selector_y) = window_to_world(x, y, Rect::new(0, 0, WORLD_WIDTH, WORLD_HEIGHT), screen_space.rect());
+                            let (selector_x, selector_y) = window_to_world(x, y, naming_rect_zoom, screen_space.rect());
                             for pixel in naming_pixels.iter_mut() {
+                                if !naming_rect_crop.contains_rect(pixel.rect) {
+                                    continue;
+                                }
                                 if pixel.rect.contains_point(Point::new(selector_x, selector_y)) {
                                     if !pixel.hovered && mousestate.left() {
                                         pixel.selected = last_selected_toggle_result;
@@ -172,14 +189,25 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                     }
                 },
                 Event::MouseButtonDown { mouse_btn, x, y, .. } => {
-                    if mouse_btn != MouseButton::Left && mouse_btn != MouseButton::Right {
+                    if mouse_btn == MouseButton::Right {
+                        naming_rect_index = (naming_rect_index + 1) % naming_rect_count;
+                        naming_rect = &main_context.config.naming_rects[naming_rect_index];
+                        naming_rect_zoom = Rect::new(naming_rect.zoom.x as i32, naming_rect.zoom.y as i32, naming_rect.zoom.w, naming_rect.zoom.h);
+                        naming_rect_crop = Rect::new(naming_rect.crop.x as i32, naming_rect.crop.y as i32, naming_rect.crop.w, naming_rect.crop.h);
+                        for pixel in naming_pixels.iter_mut() {
+                            pixel.hovered = false;
+                        }
                         continue;
                     }
-                    if mouse_btn == MouseButton::Left {
-                        last_selected_toggle_result = true;
+                    if mouse_btn != MouseButton::Left {
+                        continue;
                     }
-                    let (selector_x, selector_y) = window_to_world(x, y, Rect::new(0, 0, WORLD_WIDTH, WORLD_HEIGHT), screen_space.rect());
+                    last_selected_toggle_result = true;
+                    let (selector_x, selector_y) = window_to_world(x, y, naming_rect_zoom, screen_space.rect());
                     for pixel in naming_pixels.iter_mut() {
+                        if !naming_rect_crop.contains_rect(pixel.rect) {
+                            continue;
+                        }
                         if pixel.rect.contains_point(Point::new(selector_x, selector_y)) {
                             if mouse_btn == MouseButton::Left {
                                 pixel.selected = !pixel.selected;
@@ -270,34 +298,14 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
             naming_search_state = NamingSearchState::ClickingPixels;
 
             // Get screenshot data
-            let screenshot_data = &local_screenshot_data.pop().unwrap();
+            let screenshot_data = &mut local_screenshot_data.pop().unwrap();
 
-            // Get colors of pixels we're interested in
-            let mut colors: Vec<Color> = Vec::with_capacity(LETTER_DATA.len());
-            frame_images::get_pixel_colors_naming(&mut colors, screenshot_data, &LETTER_DATA);
-
-            // Create pixel grid to click on
-            naming_pixels.clear();
-            let size = 480 / 10;
-            let start_x = (640 - (size * 11)) / 2;
-            let start_y = (480 - (size * 10)) / 2;
-            let mut row_index = 0;
-            let mut row_number = 0;
-            for color in colors {
-                naming_pixels.push(
-                    NamingPixel {
-                        color,
-                        rect: Rect::new(start_x + (row_index * size), start_y + (row_number * size), size as u32, size as u32),
-                        hovered: false,
-                        selected: false
-                    }
-                );
-                row_index += 1;
-                if row_index >= 11 {
-                    row_index = 0;
-                    row_number += 1;
-                }
-            }
+            // Create texture
+            let surface = Surface::from_data(&mut screenshot_data.data, 
+                screenshot_data.width, screenshot_data.height, screenshot_data.stride, PixelFormat::RGBA32).unwrap();
+            let mut texture = Texture::from_surface(&surface, &main_context.texture_creator).unwrap();
+            texture.set_scale_mode(ScaleMode::Nearest);
+            screenshot_texture = Some(texture);
         }
         drop(local_screenshot_data);
 
@@ -320,17 +328,26 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 _ = program_common::draw_connected_text(main_context, &screen_space, is_connected);
             },
             NamingSearchState::ClickingPixels => {
-                // Draw inside of the world texture
-                _ = main_context.canvas.with_texture_canvas(&mut world_texture, |texture_canvas| {
-                    // Clear the world texture
-                    texture_canvas.set_draw_color(Color::RGBA(0, 0, 0, 255));
+                // Draw inside of the overlay texture
+                _ = main_context.canvas.with_texture_canvas(&mut overlay_texture, |texture_canvas| {
+                    // Clear the overlay texture
+                    texture_canvas.set_draw_color(Color::RGBA(0, 0, 0, 220));
                     texture_canvas.clear();
 
-                    // Draw pixel grid
+                    // Draw pixels
+                    texture_canvas.set_blend_mode(BlendMode::None);
+                    texture_canvas.set_draw_color(Color::RGBA(0, 0, 0, 0));
+                    for pixel in LETTER_DATA {
+                        if !naming_rect_crop.contains_point(Point::new(pixel.0, pixel.1)) {
+                            continue;
+                        }
+                        _ = texture_canvas.fill_rect(Rect::new(pixel.0, pixel.1, 1, 1));
+                    }
+                    texture_canvas.set_blend_mode(BlendMode::Blend);
                     for pixel in &naming_pixels {
-                        texture_canvas.set_draw_color(pixel.color);
-                        _ = texture_canvas.fill_rect(pixel.rect);
-
+                        if !naming_rect_crop.contains_rect(pixel.rect) {
+                            continue;
+                        }
                         if pixel.selected {
                             texture_canvas.set_draw_color(Color::RGBA(255, 0, 0, 196));
                             _ = texture_canvas.fill_rect(pixel.rect);
@@ -341,8 +358,21 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                     }
                 });
 
-                // Copy the world texture to the canvas
-                _ = main_context.canvas.copy(&world_texture, Rect::new(0, 0, WORLD_WIDTH, WORLD_HEIGHT), screen_space.irect());
+                // Get a destination rectangle that accounts for crop
+                let mut dest_rect = screen_space.rect();
+                dest_rect.x += dest_rect.w * ((naming_rect_crop.x - naming_rect_zoom.x) as f32 / (naming_rect_zoom.w as f32));
+                dest_rect.y += dest_rect.h * ((naming_rect_crop.y - naming_rect_zoom.y) as f32 / (naming_rect_zoom.h as f32));
+                dest_rect.w *= (naming_rect_crop.w as f32) / (naming_rect_zoom.w as f32);
+                dest_rect.h *= (naming_rect_crop.h as f32) / (naming_rect_zoom.h as f32);
+                let dest_rect = Rect::new(dest_rect.x as i32, dest_rect.y as i32, dest_rect.w as u32, dest_rect.h as u32);
+
+                // Draw screenshot behind canvas (so blending works correctly)
+                if let Some(screenshot) = &screenshot_texture {
+                    _ = main_context.canvas.copy(&screenshot, naming_rect_crop, dest_rect);
+                }
+
+                // Copy the overlay texture to the canvas
+                _ = main_context.canvas.copy(&overlay_texture, naming_rect_crop, dest_rect);
             },
             NamingSearchState::Found => {
                 if let Some(seed) = main_context.run_context.rng_seed() {

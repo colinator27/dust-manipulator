@@ -1,5 +1,4 @@
-use sdl3::{pixels::{Color, PixelFormat}, rect::Rect};
-use sdl3_sys::pixels::SDL_PIXELFORMAT_RGBA32;
+use sdl3::rect::Rect;
 
 use crate::server::ScreenshotData;
 
@@ -111,16 +110,5 @@ pub fn clear_unwanted_pixels_snowballs(output_image: &mut Vec<u8>, screenshot_da
             pos += 4;
         }
         y += 1;
-    }
-}
-
-pub fn get_pixel_colors_naming(output_colors: &mut Vec<Color>, screenshot_data: &ScreenshotData, points: &[(i32, i32)]) {
-    for point in points {
-        let pos = ((point.1 * screenshot_data.stride as i32) + (point.0 * 4)) as usize;
-        let mut curr_color = u32::from_ne_bytes(screenshot_data.data[pos..pos+4].try_into().unwrap());
-        if curr_color != 0xFF000000 {
-            curr_color = 0xFFFFFFFF;
-        }
-        output_colors.push(Color::from_u32(&PixelFormat::from(SDL_PIXELFORMAT_RGBA32.0 as i64), curr_color));
     }
 }

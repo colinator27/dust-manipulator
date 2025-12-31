@@ -129,8 +129,20 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
         // Ignore any server messages
         main_context.ignore_server_messages();
 
+        // Show window, if not already done
+        if !main_context.window_shown {
+            main_context.canvas.window_mut().show();
+            main_context.window_shown = true;
+        }
+
         // Sleep until next frame
         frame_timer.end_and_sleep();
+    }
+
+    // Show window, if not already done
+    if !main_context.window_shown {
+        main_context.canvas.window_mut().show();
+        main_context.window_shown = true;
     }
 
     chosen_program

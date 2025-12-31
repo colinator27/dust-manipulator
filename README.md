@@ -52,11 +52,11 @@ Currently unfinished and experimental code with some of its programs, but is cur
     * Launch Undertale. Progress the intro story panels quickly; you can pause on the title card/instructions if needed.
     * Navigate the naming screen itself and choose a name at a brisk pace, preferably within 5 seconds to be safe.
         - While the shaking letters are visible, press hotkey 1 to take a screenshot from the OBS plugin.
-    * The tool window now contains pixels. When you have downtime (e.g. the long hallway in Ruins), click/drag on all of the white pixels.
+    * The tool window now shows the screenshot, with a transparent overlay on top. When you have downtime (e.g. the long hallway in Ruins, and at the end of Ruins), click/drag on all of the "highlighted" (non-obscured) pixels.
         - You can press hotkey 2 to teleport your cursor to the middle of the tool window, which also keeps focus on Undertale.
             * (This may not function 100% correctly if the window title is not exactly `UNDERTALE`, at least on Windows.)
         - Hotkey 4 can be used to re-focus the tool window, if desired (e.g. to press ESC to quit the program).
-    * When done filling the pixels precisely, press hotkey 3 to perform the RNG search. This should be pretty quick.
+    * When done selecting the pixels *precisely*, press hotkey 3 to perform the RNG search. This should be pretty quick, if not instant.
     * Press hotkey 3 again to progress to the Marriage Manipulator tool.
 - Marriage Manipulation:
     * Upon entering this tool, it will take up to 1-2 minutes to calculate/preload snowball data. The text in the bottom left will disappear upon completion.

@@ -80,6 +80,7 @@ pub struct MainContext<'a> {
     pub font: &'a Font<'a>,
     pub canvas: &'a mut Canvas<Window>,
     pub texture_creator: &'a TextureCreator<WindowContext>,
+    pub window_shown: bool,
 
     // Server communication
     pub hotkey_receiver: &'a Receiver<u32>,
@@ -168,6 +169,7 @@ fn main() {
     let window = video_subsystem.window("Dust Manipulator", default_width, default_height)
         .position_centered()
         .resizable()
+        .hidden()
         .build()
         .expect("Failed to create window");
     let mut canvas = window.into_canvas();
@@ -180,6 +182,7 @@ fn main() {
         font: &font,
         canvas: &mut canvas,
         texture_creator: &texture_creator,
+        window_shown: false,
         hotkey_receiver: &hotkey_receiver,
         message_to_send_sender: &message_to_send_sender,
         server_connected,

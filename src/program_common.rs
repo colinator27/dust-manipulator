@@ -1,7 +1,7 @@
 use std::{f32, ptr};
 
 use sdl3::{pixels::Color, rect::Rect, render::{Canvas, FPoint, FRect, Texture}, video::Window};
-use sdl3_sys::{pixels::SDL_FColor, rect::SDL_FPoint, render::{SDL_RenderGeometry, SDL_Vertex}, timer::{SDL_DelayPrecise, SDL_GetTicksNS}, video::SDL_SetWindowFocusable};
+use sdl3_sys::{pixels::SDL_FColor, rect::SDL_FPoint, render::{SDL_RenderGeometry, SDL_Vertex}, timer::{SDL_DelayPrecise, SDL_GetTicksNS}};
 
 use crate::MainContext;
 

@@ -48,6 +48,20 @@ impl ConfigRunnerVersion {
 }
 
 #[derive(Deserialize, Clone)]
+pub struct ConfigNamingRect {
+    pub x: u32,
+    pub y: u32,
+    pub w: u32,
+    pub h: u32
+}
+
+#[derive(Deserialize, Clone)]
+pub struct ConfigNamingRects {
+    pub zoom: ConfigNamingRect,
+    pub crop: ConfigNamingRect
+}
+
+#[derive(Deserialize, Clone)]
 pub struct Config {
     pub runner_version: ConfigRunnerVersion,
     pub server_port: u16,
@@ -55,6 +69,7 @@ pub struct Config {
     pub hotkey_2_name: String,
     pub hotkey_3_name: String,
     pub hotkey_4_name: String,
+    pub naming_rects: Vec<ConfigNamingRects>
 }
 impl Config {
     pub fn read() -> Result<Self, Error> {

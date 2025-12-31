@@ -2,7 +2,6 @@ use std::{sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex}, thread};
 
 use defer_rs::defer;
 use sdl3::{event::Event, keyboard::Keycode, mouse::MouseButton, pixels::{Color, PixelFormat}, rect::Rect, render::{FPoint, ScaleMode, Texture}, surface::Surface};
-use sdl3_sys::pixels::SDL_PIXELFORMAT_RGBA32;
 
 use crate::{compute_shaders::PointU32, compute_snowball_search::{self, SnowballSearchParameters, SnowballSearchResult}, frame_images, program_common::{draw_circle, fpoint_camera_transform, window_to_world_f32, FrameTimer, ScreenSpace}, rng::{LinearPrecomputedRNG, LinearRNG, RNG}, server::MessageToSend, snowballs::{SnowArea, SNOWBALLS_ORIGIN_X, SNOWBALLS_ORIGIN_Y}, windowing::{focus_game_window, window_set_focusable}, MainContext, SubProgram};
 
@@ -341,8 +340,8 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
             frame_images::clear_unwanted_pixels_snowballs(&mut cleaned_data, &screenshot_data, final_view_rect);
             
             // Create texture
-            let surface = Surface::from_data(&mut cleaned_data, final_view_rect.w as u32, final_view_rect.h as u32, final_view_rect.w as u32 * 4, 
-                                                        PixelFormat::from(SDL_PIXELFORMAT_RGBA32.0 as i64)).unwrap();
+            let surface = Surface::from_data(&mut cleaned_data, 
+                final_view_rect.w as u32, final_view_rect.h as u32, final_view_rect.w as u32 * 4, PixelFormat::RGBA32).unwrap();
             let mut texture = Texture::from_surface(&surface, &main_context.texture_creator).unwrap();
             texture.set_scale_mode(ScaleMode::Nearest);
             screenshot_texture = Some(texture);

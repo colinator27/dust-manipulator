@@ -1,6 +1,6 @@
 use std::{ffi::{c_void, CStr}, fs::{self}, ptr};
 
-use sdl3::{gpu::ShaderFormat, sys::gpu::{SDL_AcquireGPUCommandBuffer, SDL_BeginGPUComputePass, SDL_BeginGPUCopyPass, SDL_BindGPUComputePipeline, SDL_BindGPUComputeStorageBuffers, SDL_CreateGPUBuffer, SDL_CreateGPUComputePipeline, SDL_CreateGPUDevice, SDL_CreateGPUTransferBuffer, SDL_DestroyGPUDevice, SDL_DispatchGPUCompute, SDL_DownloadFromGPUBuffer, SDL_EndGPUComputePass, SDL_EndGPUCopyPass, SDL_GPUBuffer, SDL_GPUBufferCreateInfo, SDL_GPUBufferRegion, SDL_GPUCommandBuffer, SDL_GPUComputePipeline, SDL_GPUComputePipelineCreateInfo, SDL_GPUCopyPass, SDL_GPUDevice, SDL_GPUFence, SDL_GPUShaderFormat, SDL_GPUStorageBufferReadWriteBinding, SDL_GPUStorageTextureReadWriteBinding, SDL_GPUTransferBuffer, SDL_GPUTransferBufferCreateInfo, SDL_GPUTransferBufferLocation, SDL_GetGPUShaderFormats, SDL_MapGPUTransferBuffer, SDL_PushGPUComputeUniformData, SDL_ReleaseGPUBuffer, SDL_ReleaseGPUComputePipeline, SDL_ReleaseGPUFence, SDL_ReleaseGPUTransferBuffer, SDL_SubmitGPUCommandBufferAndAcquireFence, SDL_UnmapGPUTransferBuffer, SDL_UploadToGPUBuffer, SDL_WaitForGPUFences, SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ, SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE, SDL_GPU_SHADERFORMAT_DXIL, SDL_GPU_SHADERFORMAT_MSL, SDL_GPU_SHADERFORMAT_SPIRV, SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD, SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD}};
+use sdl3::sys::gpu::{SDL_AcquireGPUCommandBuffer, SDL_BeginGPUComputePass, SDL_BeginGPUCopyPass, SDL_BindGPUComputePipeline, SDL_BindGPUComputeStorageBuffers, SDL_CreateGPUBuffer, SDL_CreateGPUComputePipeline, SDL_CreateGPUDevice, SDL_CreateGPUTransferBuffer, SDL_DestroyGPUDevice, SDL_DispatchGPUCompute, SDL_DownloadFromGPUBuffer, SDL_EndGPUComputePass, SDL_EndGPUCopyPass, SDL_GPUBuffer, SDL_GPUBufferCreateInfo, SDL_GPUBufferRegion, SDL_GPUCommandBuffer, SDL_GPUComputePipeline, SDL_GPUComputePipelineCreateInfo, SDL_GPUCopyPass, SDL_GPUDevice, SDL_GPUFence, SDL_GPUShaderFormat, SDL_GPUStorageBufferReadWriteBinding, SDL_GPUStorageTextureReadWriteBinding, SDL_GPUTransferBuffer, SDL_GPUTransferBufferCreateInfo, SDL_GPUTransferBufferLocation, SDL_GetGPUShaderFormats, SDL_MapGPUTransferBuffer, SDL_PushGPUComputeUniformData, SDL_ReleaseGPUBuffer, SDL_ReleaseGPUComputePipeline, SDL_ReleaseGPUFence, SDL_ReleaseGPUTransferBuffer, SDL_SubmitGPUCommandBufferAndAcquireFence, SDL_UnmapGPUTransferBuffer, SDL_UploadToGPUBuffer, SDL_WaitForGPUFences, SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ, SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE, SDL_GPU_SHADERFORMAT_DXIL, SDL_GPU_SHADERFORMAT_MSL, SDL_GPU_SHADERFORMAT_SPIRV, SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD, SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD};
 
 use crate::util;
 
@@ -30,7 +30,7 @@ impl Default for ComputePipelineInfo<'_> {
 
 pub fn create_gpu_device() -> Result<*mut SDL_GPUDevice, &'static str> {
     let device = unsafe { 
-        SDL_CreateGPUDevice((ShaderFormat::SpirV | ShaderFormat::Dxil | ShaderFormat::Msl) as u32, false, std::ptr::null()) 
+        SDL_CreateGPUDevice((SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL) as u32, false, std::ptr::null()) 
     };
     if device.is_null() {
         Err("Failed to create GPU device")
