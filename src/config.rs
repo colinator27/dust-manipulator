@@ -72,9 +72,10 @@ pub struct Config {
     pub hotkey_3_name: String,
     pub hotkey_4_name: String,
     pub mouse_warps: bool,
-    pub naming_rects: Vec<ConfigNamingRects>,
+    pub snowball_immediate_place: bool,
     pub naming_advance_tool: SubProgram,
-    pub naming_auto_advance_seconds: u32
+    pub naming_auto_advance_seconds: u32,
+    pub naming_rects: Vec<ConfigNamingRects>
 }
 impl Config {
     pub fn read() -> Result<Self, Error> {

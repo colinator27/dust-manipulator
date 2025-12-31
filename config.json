@@ -6,6 +6,9 @@
     "hotkey_3_name": "F3",
     "hotkey_4_name": "F5",
     "mouse_warps": true,
+    "snowball_immediate_place": false,
+    "naming_advance_tool": "DogiManip",
+    "naming_auto_advance_seconds": 3,
     "naming_rects": [
         {
             "zoom": {
@@ -35,7 +38,5 @@
                 "h": 130
             }
         }
-    ],
-    "naming_advance_tool": "DogiManip",
-    "naming_auto_advance_seconds": 3
+    ]
 }

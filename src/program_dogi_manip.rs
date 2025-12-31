@@ -122,12 +122,24 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 },
                 
                 Event::MouseButtonDown { mouse_btn: MouseButton::Left, x, y, .. } => {
-                    // Start placing snowball
                     let (world_x, world_y) = window_to_world_f32(x, y, actual_world_view, screen_space.rect());
-                    placing_snowball = Some(PlacedSnowball {
-                        x: f32::max(world_x, x_limit as f32),
-                        y: world_y
-                    });
+                    if main_context.config.snowball_immediate_place {
+                        // Immediately place snowball
+                        placed_snowballs.push(PlacedSnowball {
+                            x: f32::max(world_x, x_limit as f32),
+                            y: world_y
+                        });
+                        if placed_snowballs.len() >= num_to_click {
+                            // Enough snowballs have been clicked - queue a search
+                            queued_search = true;
+                        }
+                    } else {
+                        // Start placing snowball
+                        placing_snowball = Some(PlacedSnowball {
+                            x: f32::max(world_x, x_limit as f32),
+                            y: world_y
+                        });
+                    }
                 },
                 Event::MouseButtonUp { mouse_btn: MouseButton::Left, x, y, .. } => {
                     // Place snowball, if one was being placed
