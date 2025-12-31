@@ -26,6 +26,17 @@ Currently unfinished and experimental code with some of its programs, but is cur
         - `hotkey_*_name`: Hotkey names to display in the tool.
             * These do *not* change the actual hotkeys, as those are configured in OBS global hotkey settings.
             * These are purely for visual display inside of the tool, and should be updated whenever the corresponding OBS hotkeys get changed.
+        - `mouse_warps`: Set to `true` by default, which enables programs to warp the mouse to the tool window. Set to `false` to disable this behavior.
+        - `window_always_on_top`: Set to `false` by default. If set to `true`, the tool window will always be placed on top of other windows, even if it loses focus. It can still be minimized.
+        - `window_opacity`: Often useful in conjunction with `window_always_on_top`, this sets the window opacity, if supported. Should be a number between 0 and 1.
+        - `snowball_immediate_place`: Set to `false` by default. If set to `true`, snowballs will be immediately placed when clicking, rather than waiting for the click to be released.
+        - `naming_advance_tool`: Set to `DogiManip` by default. Changes the tool that is advanced to, either by hotkey or automatically, after finding a random seed in the naming screen.
+            * This can currently be changed to `ProgramSelector` or `DustManip`.
+        - `naming_auto_advance_seconds`: Set to `3` by default. This defines how many seconds it should take for the naming seed search tool to automatically advance to the tool set by `naming_advance_tool`.
+            * The timer begins once the random seed and position are found.
+            * This can be set to `0` to disable automatically advancing.
+        - `naming_rects`: For the naming seed search, this defines the zoom and crop rectangles used for display.
+            * The number of them can be changed, as long as there's at least 1 pair of rectangles.
 - Setup for OBS
     * It's recommended to create a "group" in an OBS scene, placing any Undertale captures within.
         - Make sure that the group is exactly 4:3 aspect ratio (like Undertale itself), otherwise things will not work very well.
@@ -56,10 +67,11 @@ Currently unfinished and experimental code with some of its programs, but is cur
         - You can press hotkey 2 to teleport your cursor to the middle of the tool window, which also keeps focus on Undertale.
             * (This may not function 100% correctly if the window title is not exactly `UNDERTALE`, at least on Windows.)
         - Hotkey 4 can be used to re-focus the tool window, if desired (e.g. to press ESC to quit the program).
+        - Use right click to advance to the next set of letters. (The letters that are shown can be configured, but it's a manual process in the config file.)
     * When done selecting the pixels *precisely*, press hotkey 3 to perform the RNG search. This should be pretty quick, if not instant.
     * Press hotkey 3 again to progress to the Marriage Manipulator tool.
 - Marriage Manipulation:
-    * Upon entering this tool, it will take up to 1-2 minutes to calculate/preload snowball data. The text in the bottom left will disappear upon completion.
+    * Upon entering this tool, it will take some time (but less than 2 minutes) to calculate/preload snowball data. The text in the bottom left will disappear upon completion.
         - (This is done slowly in a background thread, so as to not cause any lagspikes. It can be safely canceled with ESC like normal.)
     * During the run, you must not call excessive amounts of RNG. It's somewhat lenient, but on-screen textboxes call a *lot* of RNG every frame.
     * Perform Dogi skip using the standard speedrun setup, except no save/load is required (re-entering the room *is* still required).
