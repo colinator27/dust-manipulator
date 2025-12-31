@@ -12,6 +12,9 @@ env:
 jobs:
   build-windows:
     runs-on: windows-latest
+    strategy:
+      matrix:
+        build_config: [{"suffix": "", "command_append": ""}, {"suffix": "-console", "command_append": "--features console"}]
     steps:
     - uses: actions/checkout@v4
     - name: Download latest SDL_shadercross artifact
@@ -32,7 +35,7 @@ jobs:
         compile.bat
         cd ../../
     - name: Build
-      run: cargo build --release
+      run: cargo build --release ${{ matrix.build_config.command_append }}
     - name: Copy extra files
       shell: cmd
       run: |
@@ -41,7 +44,7 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: dust-manipulator-win-x64
+        name: dust-manipulator-win-x64${{ matrix.build_config.suffix }}
         path: |
           target/release/dust-manipulator.exe
           target/release/config.json

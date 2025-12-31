@@ -40,6 +40,9 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
         curr_y += 4 + menu_item.rect.h;
         program_list_items.push(menu_item);
     }
+    let version_surface = main_context.font.render_text(&format!("Dust Manipulator v{}", env!("CARGO_PKG_VERSION")), Color::RGB(128, 128, 128)).expect("Failed to render text to surface");
+    let mut version_texture = Texture::from_surface(&version_surface, main_context.texture_creator).expect("Failed to create texture from surface");
+    version_texture.set_scale_mode(ScaleMode::Nearest);
 
     let mut event_pump = main_context.sdl_context.event_pump().unwrap();
     'running: loop {
@@ -122,6 +125,16 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
             _ = main_context.canvas.copy(&item.texture, rect_from_texture(&item.texture), screen_space.rect_world_to_screen(item.rect));
             i += 1;
         }
+
+        // Draw other text
+        let version_rect = rect_from_texture(&version_texture);
+        let version_scale = 2;
+        let version_dest_rect = Rect::new(
+            screen_space.width() as i32 - (version_rect.width() as i32  * version_scale) - 8,
+            screen_space.height() as i32 - (version_rect.height() as i32 * version_scale) - 8, 
+            version_rect.width() as u32 * version_scale as u32, version_rect.height() as u32 * version_scale as u32
+        );
+        _ = main_context.canvas.copy(&version_texture, version_rect, version_dest_rect);
 
         // Present latest canvas
         main_context.canvas.present();

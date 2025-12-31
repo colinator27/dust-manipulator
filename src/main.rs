@@ -1,3 +1,12 @@
+#![cfg_attr(
+  all(
+    target_os = "windows",
+    not(debug_assertions),
+    not(feature = "console")
+  ),
+  windows_subsystem = "windows"
+)]
+
 use std::{sync::{atomic::{AtomicBool, Ordering}, mpsc::{self, Receiver, Sender}, Arc, Mutex}, thread};
 use config::Config;
 use sdl3::{render::{Canvas, TextureCreator}, video::{Window, WindowContext}, Sdl};
