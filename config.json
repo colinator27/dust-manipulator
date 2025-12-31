@@ -34,5 +34,7 @@
                 "h": 130
             }
         }
-    ]
+    ],
+    "naming_advance_tool": "DogiManip",
+    "naming_auto_advance_seconds": 3
 }

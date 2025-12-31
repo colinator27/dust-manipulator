@@ -2,11 +2,23 @@ use std::{f32, ptr};
 
 use sdl3::{pixels::Color, rect::Rect, render::{Canvas, FPoint, FRect, Texture}, video::Window};
 use sdl3_sys::{pixels::SDL_FColor, rect::SDL_FPoint, render::{SDL_RenderGeometry, SDL_Vertex}, timer::{SDL_DelayPrecise, SDL_GetTicksNS}};
+use serde::Deserialize;
 
 use crate::MainContext;
 
 pub const DEFAULT_SCREEN_WIDTH: u32 = 640;
 pub const DEFAULT_SCREEN_HEIGHT: u32 = 480;
+
+#[derive(Clone, Copy, Deserialize)]
+pub enum SubProgram {
+    None,
+    ProgramSelector,
+    DustManip,
+    NamingSeedSearch,
+    DogiManip,
+    Error,
+    RNGOverride
+}
 
 pub struct ScreenSpace {
     scale_amount: f32,
@@ -128,6 +140,9 @@ impl FrameTimer {
         if desired_delay > 0 {
             unsafe { SDL_DelayPrecise(desired_delay as u64) };
         }
+    }
+    pub fn target_fps(&self) -> u32 {
+        self.target_fps
     }
 }
 

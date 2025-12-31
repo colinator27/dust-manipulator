@@ -14,6 +14,8 @@ use sdl3_sys::{init::SDL_IsMainThread, messagebox::{SDL_MESSAGEBOX_ERROR, SDL_Sh
 use server::{MessageToSend, ScreenshotData};
 use text_rendering::Font;
 
+use crate::program_common::SubProgram;
+
 extern crate sdl3;
 
 mod rng;
@@ -118,17 +120,6 @@ impl MainContext<'_> {
         screenshot_data.clear();
         drop(screenshot_data);
     }
-}
-
-#[derive(Clone, Copy)]
-pub enum SubProgram {
-    None,
-    ProgramSelector,
-    DustManip,
-    NamingSeedSearch,
-    DogiManip,
-    Error,
-    RNGOverride
 }
 
 struct PanicParameters {

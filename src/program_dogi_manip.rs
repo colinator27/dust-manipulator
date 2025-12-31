@@ -304,6 +304,15 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 0, 
                 screen_space.scale(), 
                 Color::RGB(128, 128, 128));
+        } else {
+            _ = main_context.font.draw_text(
+                main_context, 
+                "Preload complete.", 
+                screen_space.x_world_to_screen(8.0), screen_space.y_world_to_screen(WORLD_HEIGHT as f32 - 8.0),
+                0.0, 1.0,
+                0, 
+                screen_space.scale(), 
+                Color::RGB(128, 128, 128));
         }
 
         // Present latest canvas

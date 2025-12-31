@@ -138,6 +138,9 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
     // Whether RNG was just found by this tool or not
     let mut rng_just_found = false;
 
+    // Countdown for automatically advancing, if enabled
+    let mut auto_advance_countdown = 0;
+
     // State for mouse dragging
     let mut last_selected_toggle_result = true;
 
@@ -157,7 +160,19 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
         if main_context.panic_occurred.load(Ordering::Relaxed) {
             break;
         }
-        
+
+        // Advance to next tool if wanted
+        if auto_advance_countdown > 0 {
+            auto_advance_countdown -= 1;
+            if naming_search_state == NamingSearchState::Found {
+                if auto_advance_countdown == 0 {
+                    return main_context.config.naming_advance_tool;
+                }
+            } else {
+                auto_advance_countdown = 0;
+            }
+        }
+
         let frame_timer = FrameTimer::start(30);
         let screen_space = ScreenSpace::new(&main_context);
 
@@ -239,8 +254,11 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 main_context.run_context.set_rng(search_result.single_matched_seed, search_result.single_matched_position as usize);
 
                 // Progress to next state
-                naming_search_state = NamingSearchState::Found;    
-                rng_just_found = true;            
+                naming_search_state = NamingSearchState::Found;
+                rng_just_found = true;
+                if main_context.config.naming_auto_advance_seconds > 0 {
+                    auto_advance_countdown = frame_timer.target_fps() * main_context.config.naming_auto_advance_seconds;
+                }
             } else {
                 println!("Match count = {}, data1 = {}, data2 = {}", search_result.match_count, search_result.single_matched_seed, search_result.single_matched_position);
             }
@@ -263,8 +281,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 2 => {
                     // Perform actual search, or if in found state, progress to next tool
                     if rng_just_found {
-                        // TODO: somehow make this configurable so that this can be for dust manip instead?
-                        return SubProgram::DogiManip;
+                        return main_context.config.naming_advance_tool;
                     } else {
                         queued_search = true;
                     }
@@ -382,9 +399,14 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
             NamingSearchState::Found => {
                 if let Some(seed) = main_context.run_context.rng_seed() {
                     if let Some(pos) = main_context.run_context.min_rng_position() {
+                        let auto_advance_text = if main_context.config.naming_auto_advance_seconds > 0 {
+                            "\n(Automatically advancing.)"
+                        } else {
+                            ""
+                        };
                         _ = main_context.font.draw_text(
                             main_context, 
-                            &format!("Seed found: {} at position {}", seed, pos), 
+                            &format!("Seed found: {} at position {}{}", seed, pos, auto_advance_text), 
                             screen_space.center_x(), screen_space.center_y(),
                             0.5, 0.0,
                             0, 

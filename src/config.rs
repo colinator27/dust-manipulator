@@ -2,6 +2,8 @@ use std::{fs, io::Error};
 
 use serde::Deserialize;
 
+use crate::program_common::SubProgram;
+
 // Based on GameMaker runner version (so Linux v1.001 on Windows falls under Undertale_Windows_v1_001)
 #[derive(Deserialize, Clone, Copy)]
 #[expect(non_camel_case_types)]
@@ -69,7 +71,9 @@ pub struct Config {
     pub hotkey_2_name: String,
     pub hotkey_3_name: String,
     pub hotkey_4_name: String,
-    pub naming_rects: Vec<ConfigNamingRects>
+    pub naming_rects: Vec<ConfigNamingRects>,
+    pub naming_advance_tool: SubProgram,
+    pub naming_auto_advance_seconds: u32
 }
 impl Config {
     pub fn read() -> Result<Self, Error> {
