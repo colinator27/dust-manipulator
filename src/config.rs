@@ -71,6 +71,7 @@ pub struct Config {
     pub hotkey_2_name: String,
     pub hotkey_3_name: String,
     pub hotkey_4_name: String,
+    pub mouse_warps: bool,
     pub naming_rects: Vec<ConfigNamingRects>,
     pub naming_advance_tool: SubProgram,
     pub naming_auto_advance_seconds: u32

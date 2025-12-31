@@ -324,7 +324,9 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 0 => {
                     // Screenshots
                     let window = main_context.canvas.window_mut();
-                    main_context.sdl_context.mouse().warp_mouse_in_window(window, window.size().0 as f32 / 2.0, window.size().1 as f32 / 2.0);
+                    if main_context.config.mouse_warps {
+                        main_context.sdl_context.mouse().warp_mouse_in_window(window, window.size().0 as f32 / 2.0, window.size().1 as f32 / 2.0);
+                    }
                     window_set_focusable(window, false);
                     window.sync();
                     focus_game_window();

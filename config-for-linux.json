@@ -5,6 +5,7 @@
     "hotkey_2_name": "F2",
     "hotkey_3_name": "F3",
     "hotkey_4_name": "F5",
+    "mouse_warps": true,
     "naming_rects": [
         {
             "zoom": {

@@ -761,7 +761,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
             if sdl3::timer::ticks() >= curr_raise_window_time {
                 raise_window_time = None;
                 let window = main_context.canvas.window_mut();
-                if window.raise() {
+                if window.raise() && main_context.config.mouse_warps {
                     main_context.sdl_context.mouse().warp_mouse_in_window(window, window.size().0 as f32 / 2.0, window.size().1 as f32 / 2.0);
                 }
             }
