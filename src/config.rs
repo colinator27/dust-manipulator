@@ -75,6 +75,8 @@ pub struct Config {
     pub window_always_on_top: bool,
     pub window_opacity: f32,
     pub snowball_immediate_place: bool,
+    pub snowball_search_start_offset: u32,
+    pub snowball_search_range: u32,
     pub naming_advance_tool: SubProgram,
     pub naming_auto_advance_seconds: u32,
     pub naming_rects: Vec<ConfigNamingRects>

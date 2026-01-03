@@ -311,6 +311,7 @@ fn main() {
         program = match program {
             SubProgram::None => break 'running,
             SubProgram::ProgramSelector => program_selector::run(&mut main_context),
+            #[cfg(feature = "dust_manipulator")]
             SubProgram::DustManip => program_dust_manip::run(&mut main_context),
             SubProgram::NamingSeedSearch => program_naming_seed_search::run(&mut main_context),
             SubProgram::DogiManip => program_dogi_manip::run(&mut main_context),

@@ -13,6 +13,7 @@ pub const DEFAULT_SCREEN_HEIGHT: u32 = 480;
 pub enum SubProgram {
     None,
     ProgramSelector,
+    #[cfg(feature = "dust_manipulator")]
     DustManip,
     NamingSeedSearch,
     DogiManip,

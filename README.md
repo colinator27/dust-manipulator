@@ -28,8 +28,14 @@ Currently unfinished and experimental code with some of its programs, but is cur
             * These are purely for visual display inside of the tool, and should be updated whenever the corresponding OBS hotkeys get changed.
         - `mouse_warps`: Set to `true` by default, which enables programs to warp the mouse to the tool window. Set to `false` to disable this behavior.
         - `window_always_on_top`: Set to `false` by default. If set to `true`, the tool window will always be placed on top of other windows, even if it loses focus. It can still be minimized.
-        - `window_opacity`: Often useful in conjunction with `window_always_on_top`, this sets the window opacity, if supported. Should be a number between 0 and 1.
+        - `window_opacity`: Set to `1` by default. Often useful in conjunction with `window_always_on_top`, this sets the window opacity, if supported. Should be a number between 0 and 1.
         - `snowball_immediate_place`: Set to `false` by default. If set to `true`, snowballs will be immediately placed when clicking, rather than waiting for the click to be released.
+        - `snowball_search_start_offset`: Set to `0` by default. If set higher, this will be the number of RNG calls that will be skipped before considering the valid range of snowball patterns.
+        - `snowball_search_range`: Set to `500000` by default. Controls the total number of consecutive snowball patterns that will be searched against.
+            * For both the search start offset and range options, take extra care with configuring their values. 
+            * If either are set way too large, you can use up a lot of memory/resources and possibly crash. (By default, a range of 500000 uses roughly 2MB of memory to store raw RNG values alone.)
+            * If the range is set too small, you might miss the RNG window and the search pattern will not exist in the data. By default, 500000 is somewhat generous for a regular speedrun.
+            * A larger range may mean clicking more snowballs, but this effect exponentially decreases, as each snowball placed divides the number of matching patterns until only one remains.
         - `naming_advance_tool`: Set to `DogiManip` by default. Changes the tool that is advanced to, either by hotkey or automatically, after finding a random seed in the naming screen.
             * This can currently be changed to `ProgramSelector` or `DustManip`.
         - `naming_auto_advance_seconds`: Set to `3` by default. This defines how many seconds it should take for the naming seed search tool to automatically advance to the tool set by `naming_advance_tool`.
@@ -37,6 +43,7 @@ Currently unfinished and experimental code with some of its programs, but is cur
             * This can be set to `0` to disable automatically advancing.
         - `naming_rects`: For the naming seed search, this defines the zoom and crop rectangles used for display.
             * The number of them can be changed, as long as there's at least 1 pair of rectangles.
+            * Keep in mind that for speedruns, any major changes to the layout should be reviewed for legality prior to use in runs.
 - Setup for OBS
     * It's recommended to create a "group" in an OBS scene, placing any Undertale captures within.
         - Make sure that the group is exactly 4:3 aspect ratio (like Undertale itself), otherwise things will not work very well.

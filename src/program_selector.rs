@@ -9,6 +9,7 @@ impl SubProgram {
         match self {
             SubProgram::None => "None",
             SubProgram::ProgramSelector => "Program Selector",
+            #[cfg(feature = "dust_manipulator")]
             SubProgram::DustManip => "Dust Manipulator",
             SubProgram::NamingSeedSearch => "Naming Seed Search",
             SubProgram::DogiManip => "Marriage Manipulator",
@@ -25,6 +26,9 @@ struct MenuItem<'a> {
 
 pub fn run(main_context: &mut MainContext) -> SubProgram {
     let mut chosen_program = SubProgram::None;
+    #[cfg(not(feature = "dust_manipulator"))]
+    let program_list = [SubProgram::NamingSeedSearch, SubProgram::DogiManip, SubProgram::RNGOverride];
+    #[cfg(feature = "dust_manipulator")]
     let program_list = [SubProgram::NamingSeedSearch, SubProgram::DogiManip, SubProgram::DustManip, SubProgram::RNGOverride];
     let mut selection_index: i32 = -1;
 

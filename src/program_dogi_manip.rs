@@ -46,11 +46,11 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
         None => panic!()
     };
     let mut rng = RNG::new(rng_seed, runner_version.rng_15bit(), runner_version.rng_signed(), runner_version.rng_old_poly());
-    rng.skip(min_rng_position);
+    rng.skip(min_rng_position + main_context.config.snowball_search_start_offset as usize);
 
     // Initialize compute thread
-    const RANGE: usize = 500000;
-    let precomputed_rng = Arc::new(rng.precompute(RANGE + 10_000));
+    let rng_range = main_context.config.snowball_search_range;
+    let precomputed_rng = Arc::new(rng.precompute(rng_range as usize + 10_000));
     let precomputed_rng_thread = precomputed_rng.clone();
     let compute_end_signal = Arc::new(AtomicBool::new(false));
     let compute_end_signal_thread = compute_end_signal.clone();
@@ -66,7 +66,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
     let compute_result = Arc::new(Mutex::new(SnowballSearchResult::new()));
     let compute_result_thread = compute_result.clone();
     let compute_join_handle = thread::spawn(move || {
-        compute_snowball_search::thread_func(&LinearPrecomputedRNG::new(&Arc::clone(&precomputed_rng_thread), 0), RANGE,
+        compute_snowball_search::thread_func(&LinearPrecomputedRNG::new(&Arc::clone(&precomputed_rng_thread), 0), rng_range as usize,
             Arc::clone(&compute_end_signal_thread), Arc::clone(&compute_perform_search_signal_thread), 
             Arc::clone(&compute_preload_completed_signal_thread), Arc::clone(&compute_parameters_thread), 
             Arc::clone(&compute_result_thread));
@@ -191,7 +191,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
 
             // Begin search
             *compute_parameters.lock().unwrap() = SnowballSearchParameters {
-                search_range: RANGE as u32,
+                search_range: rng_range,
                 matching_snowballs
             };
             compute_perform_search_signal.store(true, Ordering::Relaxed);

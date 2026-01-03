@@ -9,6 +9,8 @@
     "window_always_on_top": false,
     "window_opacity": 1,
     "snowball_immediate_place": false,
+    "snowball_search_start_offset": 0,
+    "snowball_search_range": 500000,
     "naming_advance_tool": "DogiManip",
     "naming_auto_advance_seconds": 3,
     "naming_rects": [
