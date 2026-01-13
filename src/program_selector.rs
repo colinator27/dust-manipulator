@@ -140,11 +140,11 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
 
         // Draw other text
         let version_rect = rect_from_texture(&version_texture);
-        let version_scale = 2;
+        let version_scale = screen_space.scale();
         let version_dest_rect = Rect::new(
-            screen_space.width() as i32 - (version_rect.width() as i32  * version_scale) - 8,
-            screen_space.height() as i32 - (version_rect.height() as i32 * version_scale) - 8, 
-            version_rect.width() as u32 * version_scale as u32, version_rect.height() as u32 * version_scale as u32
+            screen_space.width() as i32 - ((version_rect.width() as f32 * version_scale) as i32) - 8,
+            screen_space.height() as i32 - ((version_rect.height() as f32 * version_scale) as i32) - 8, 
+            (version_rect.width() as f32 * version_scale) as u32, (version_rect.height() as f32 * version_scale) as u32
         );
         _ = main_context.canvas.copy(&version_texture, version_rect, version_dest_rect);
 
