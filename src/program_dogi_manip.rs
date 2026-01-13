@@ -223,7 +223,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 instructions = Some(match up_down_times {
                     0 => "NO UP/DOWN".to_owned(),
                     times => if menu_buffer {
-                        format!("Menu buffer up\nUp/down {} time{}", times, if times != 1 { "s" } else { "" })
+                        format!("Menu buffer\nUp/down {} time{}", times, if times != 1 { "s" } else { "" })
                     } else {
                         format!("Up/down {} time{}", times, if times != 1 { "s" } else { "" })
                     }
