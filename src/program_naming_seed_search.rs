@@ -138,6 +138,9 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
     // Whether RNG was just found by this tool or not
     let mut rng_just_found = false;
 
+    // Match count for when a search fails
+    let mut rng_fail_match_count = -1;
+
     // Countdown for automatically advancing, if enabled
     let mut auto_advance_countdown = 0;
 
@@ -248,6 +251,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
             let search_result = compute_result.lock().unwrap();
             if search_result.match_count == 1 {
                 // Singular match!
+                rng_fail_match_count = -1;
                 println!("Found seed = {}, pos = {}", search_result.single_matched_seed, search_result.single_matched_position);
 
                 // Set current RNG for the run
@@ -260,6 +264,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                     auto_advance_countdown = frame_timer.target_fps() * main_context.config.naming_auto_advance_seconds;
                 }
             } else {
+                rng_fail_match_count = search_result.match_count as i32;
                 println!("Match count = {}, data1 = {}, data2 = {}", search_result.match_count, search_result.single_matched_seed, search_result.single_matched_position);
             }
         }
@@ -434,6 +439,18 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
             Color::RGB(255, 255, 255),
             Color::RGBA(0, 0, 0, 128),
             16.0);
+
+        // Draw text if search failed
+        if rng_fail_match_count != -1 {
+            _ = main_context.font.draw_text(
+                main_context, 
+                &format!("Seed search failed: matched {} seeds/patterns", rng_fail_match_count), 
+                screen_space.x_world_to_screen(8.0), screen_space.y_world_to_screen(WORLD_HEIGHT as f32 - 8.0),
+                0.0, 1.0,
+                0, 
+                screen_space.scale(), 
+                Color::RGB(255, 0, 0));
+        }
 
         // Present latest canvas
         main_context.canvas.present();
