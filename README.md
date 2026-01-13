@@ -51,7 +51,7 @@ Currently unfinished and experimental code with some of its programs, but is cur
         - Display captures (and other types of captures) are totally fine to use, as long as they are still cropped to *only* the game, with no offsets/padding on the sides.
     * Add the "Dust Manipulator" effect filter to the group. It has these settings:
         - `Number of screenshots to take` (default: 10) - Used for rapid screenshots when doing dust particle RNG manipulation. Otherwise has no effect.
-        - `Screenshot width` / `Screenshot height` (default: 640x480) - Used for sizing the screenshots sent to the tool. Should be left at default values for things to work, currently.
+        - `Screenshot width` / `Screenshot height` (default: 640x480) - Used for sizing the screenshots sent to the tool. **These should be left at default values for things to work, currently.**
         - `Local port number to send data to` (default: 48654) - Should match the server port number in `config.json` from the tool.
 	* It's *not* recommended to use more than one filter at a time, as this may lead to strange behavior.
     * Set your OBS hotkeys in the OBS settings. The defaults are F1, F2, F3, and F5, as reflected in `config.json` from the tool.
