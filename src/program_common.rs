@@ -9,7 +9,7 @@ use crate::MainContext;
 pub const DEFAULT_SCREEN_WIDTH: u32 = 640;
 pub const DEFAULT_SCREEN_HEIGHT: u32 = 480;
 
-#[derive(Clone, Copy, Deserialize)]
+#[derive(Clone, Copy, Deserialize, PartialEq)]
 pub enum SubProgram {
     None,
     ProgramSelector,

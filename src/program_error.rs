@@ -34,6 +34,14 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
                     break 'running
                 },
+                Event::KeyDown { keycode: Some(Keycode::Return), .. } => {
+                    // When pressing Enter, return to program errored from, if specified
+                    if main_context.error_return_to == SubProgram::None {
+                        continue;
+                    }
+                    main_context.error_returning = true;
+                    return main_context.error_return_to;
+                },
                 _ => {}
             }
         }

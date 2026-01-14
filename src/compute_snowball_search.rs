@@ -137,19 +137,44 @@ pub struct SnowballSearchParameters {
     pub matching_snowballs: Vec<PointU32>
 }
 
-pub fn thread_func(start_rng: &impl LinearRNG, simulation_range: usize, 
+pub fn thread_func(start_rngs: &Vec<impl LinearRNG>, simulation_range: usize, 
                    end_thread: Arc<AtomicBool>, perform_search: Arc<AtomicBool>,
                    preload_completed: Arc<AtomicBool>,
                    parameters: Arc<Mutex<SnowballSearchParameters>>,
                    output: Arc<Mutex<SnowballSearchResult>>) {
     println!("Snowball compute thread started");
+
+    // Run simulations
     let mut snowball_simulation_data: Vec<u8> = Vec::with_capacity(simulation_range * 64 * 2);
     let simulator = SnowballSimulator::new();
-    simulator.simulate_range(start_rng, simulation_range, &mut snowball_simulation_data, || end_thread.load(Ordering::Relaxed));
+    if start_rngs.len() == 1 {
+        // Simulate one seed over many positions (and end early if required)
+        simulator.simulate_range(&start_rngs[0], simulation_range, &mut snowball_simulation_data, || end_thread.load(Ordering::Relaxed));
+    } else {
+        // Simulate many seeds (classic mode)
+        for start_rng in start_rngs {
+            // Skip step count RNG
+            let mut start_rng_next = start_rng.clone();
+            _ = start_rng_next.next_u32();
+            _ = start_rng_next.next_u32();
+
+            // Actually simulate
+            simulator.simulate(&start_rng_next, &mut snowball_simulation_data);
+
+            // End early if required
+            if end_thread.load(Ordering::Relaxed) {
+                break;
+            }
+        }
+    }
+
+    // If ended early, quit thread here
     if end_thread.load(Ordering::Relaxed) {
         println!("Snowball compute thread ended early");
         return;
     }
+
+    // Upload data to GPU
     println!("Snowball GPU compute preload started");
     let mut snowball_data = preload(&snowball_simulation_data).expect("Failed to preload");
     drop(snowball_simulation_data);

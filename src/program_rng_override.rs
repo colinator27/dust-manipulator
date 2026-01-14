@@ -7,6 +7,8 @@ use crate::{program_common::{rect_from_texture, FrameTimer, ScreenSpace}, MainCo
 pub fn run(main_context: &mut MainContext) -> SubProgram {
     let mut typed_string: String = "".to_owned();
 
+    let mut reset_confirmation = false;
+
     let mut event_pump = main_context.sdl_context.event_pump().unwrap();
     'running: loop {
         // Handle thread errors
@@ -29,18 +31,30 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                     break 'running
                 },
                 Event::KeyDown { keycode: Some(Keycode::Backspace), .. } => {
+                    if reset_confirmation {
+                        continue;
+                    }
                     if typed_string.len() > 0 {
                         typed_string = typed_string[0..typed_string.len() - 1].to_string();
                     }
                 },
                 Event::KeyDown { keycode: Some(Keycode::Return), .. } => {
+                    if reset_confirmation {
+                        main_context.run_context.reset();
+                        break 'running;
+                    }
                     if typed_string.len() > 0 {
                         main_context.run_context.set_rng(typed_string.parse::<u32>().unwrap(), 0);
                         break 'running;
+                    } else {
+                        reset_confirmation = true;
                     }
                 },
                 Event::KeyDown { keycode: Some(keycode), .. } => {
                     if typed_string.len() >= 5 {
+                        continue;
+                    }
+                    if reset_confirmation {
                         continue;
                     }
                     if (keycode as i32) >= (Keycode::_0 as i32) && (keycode as i32) <= (Keycode::_9 as i32) {
@@ -53,7 +67,16 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
         }
 
         // Draw the typed string
-        if typed_string.len() > 0 {
+        if reset_confirmation {
+            _ = main_context.font.draw_text(
+                main_context, 
+                "Really reset RNG state?\n(Press Enter again if so, otherwise use ESC.)", 
+                screen_space.x_world_to_screen(320.0), screen_space.y_world_to_screen(240.0),
+                0.5, 0.5,
+                0, 
+                screen_space.scale() * 2.0, 
+                Color::RGB(255, 255, 255));
+        } else if typed_string.len() > 0 {
             let surface = main_context.font.render_text(&typed_string, Color::RGB(255, 255, 255)).expect("Failed to render text to surface");
             let mut texture = Texture::from_surface(&surface, main_context.texture_creator).expect("Failed to create texture from surface");
             drop(surface);
@@ -62,6 +85,16 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
             let texture_dst_rect = Rect::new(320 - texture_src_rect.w, 240 - texture_src_rect.h, texture_src_rect.w as u32 * 2, texture_src_rect.h as u32 * 2);
             _ = main_context.canvas.copy(&texture, texture_src_rect, screen_space.rect_world_to_screen(texture_dst_rect));
         }
+
+        // Draw helpful text
+        _ = main_context.font.draw_text(
+            main_context, 
+            "Type an RNG seed number, then press Enter.\n\nOr, press Enter with no input to reset\nthe current RNG state in the tool.", 
+            screen_space.x_world_to_screen(8.0), screen_space.y_world_to_screen(8.0),
+            0.0, 0.0,
+            0, 
+            screen_space.scale(), 
+            Color::RGB(255, 255, 255));
 
         // Present latest canvas
         main_context.canvas.present();

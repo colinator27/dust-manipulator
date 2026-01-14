@@ -3,7 +3,7 @@ use std::{sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex}, thread};
 use defer_rs::defer;
 use sdl3::{event::Event, keyboard::Keycode, mouse::MouseButton, pixels::{Color, PixelFormat}, rect::Rect, render::{FPoint, ScaleMode, Texture}, surface::Surface};
 
-use crate::{compute_shaders::PointU32, compute_snowball_search::{self, SnowballSearchParameters, SnowballSearchResult}, frame_images, program_common::{draw_circle, fpoint_camera_transform, window_to_world_f32, FrameTimer, ScreenSpace}, rng::{LinearPrecomputedRNG, LinearRNG, RNG}, server::MessageToSend, snowballs::{SnowArea, SNOWBALLS_ORIGIN_X, SNOWBALLS_ORIGIN_Y}, windowing::{focus_game_window, window_set_focusable}, MainContext, SubProgram};
+use crate::{MainContext, SubProgram, compute_shaders::PointU32, compute_snowball_search::{self, SnowballSearchParameters, SnowballSearchResult}, frame_images, program_common::{FrameTimer, ScreenSpace, draw_circle, fpoint_camera_transform, window_to_world_f32}, rng::{LinearPrecomputedRNG, LinearRNG, PrecomputedRNG, RNG}, server::MessageToSend, snowballs::{SNOWBALLS_ORIGIN_X, SNOWBALLS_ORIGIN_Y, SnowArea}, windowing::{focus_game_window, window_set_focusable}};
 
 #[derive(Clone)]
 struct PlacedSnowball {
@@ -34,24 +34,41 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
 
     // Initialize RNG
     let runner_version = &main_context.config.runner_version;
-    let rng_seed = match main_context.run_context.rng_seed() {
-        Some(seed) => seed,
-        None => {
-            main_context.error_message = "Error: Need to first find the RNG seed before using this program.";
-            return SubProgram::Error;
+    let rngs: Arc<Vec<RNG>>;
+    let rng_range: u32;
+    if main_context.error_returning {
+        main_context.error_returning = false;
+
+        // Create precomputed RNGs for all seeds
+        let seeds = RNG::calculate_unique_seeds(runner_version.rng_15bit(), runner_version.rng_signed());
+        let mut rngs_vec = Vec::with_capacity(seeds.len());
+        for seed in seeds {
+            rngs_vec.push(RNG::new(seed, runner_version.rng_15bit(), runner_version.rng_signed(), runner_version.rng_old_poly()));
         }
-    };
-    let min_rng_position = match main_context.run_context.min_rng_position() {
-        Some(pos) => pos,
-        None => panic!()
-    };
-    let mut rng = RNG::new(rng_seed, runner_version.rng_15bit(), runner_version.rng_signed(), runner_version.rng_old_poly());
-    rng.skip(min_rng_position + main_context.config.snowball_search_start_offset as usize);
+        rngs = Arc::new(rngs_vec);
+        rng_range = 0;
+    } else {
+        let rng_seed = match main_context.run_context.rng_seed() {
+            Some(seed) => seed,
+            None => {
+                main_context.error_message = "Error: Need to first find the RNG seed before using this program.\n\n(Or, press Enter to use the classic version of the tool, requiring a game reload.)";
+                main_context.error_return_to = SubProgram::DogiManip;
+                return SubProgram::Error;
+            }
+        };
+        let min_rng_position = match main_context.run_context.min_rng_position() {
+            Some(pos) => pos,
+            None => panic!()
+        };
+        let mut rng = RNG::new(rng_seed, runner_version.rng_15bit(), runner_version.rng_signed(), runner_version.rng_old_poly());
+        rng.skip(min_rng_position + main_context.config.snowball_search_start_offset as usize);
+
+        rng_range = main_context.config.snowball_search_range;
+        rngs = Arc::new(vec![rng]);
+    }
 
     // Initialize compute thread
-    let rng_range = main_context.config.snowball_search_range;
-    let precomputed_rng = Arc::new(rng.precompute(rng_range as usize + 10_000));
-    let precomputed_rng_thread = precomputed_rng.clone();
+    let rngs_thread = rngs.clone();
     let compute_end_signal = Arc::new(AtomicBool::new(false));
     let compute_end_signal_thread = compute_end_signal.clone();
     let compute_perform_search_signal = Arc::new(AtomicBool::new(false));
@@ -65,8 +82,19 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
     let compute_parameters_thread = compute_parameters.clone();
     let compute_result = Arc::new(Mutex::new(SnowballSearchResult::new()));
     let compute_result_thread = compute_result.clone();
+    let compute_precomputed_rng = Arc::new(Mutex::new(None as Option<PrecomputedRNG>));
+    let compute_precomputed_rng_thread = compute_precomputed_rng.clone();
     let compute_join_handle = thread::spawn(move || {
-        compute_snowball_search::thread_func(&LinearPrecomputedRNG::new(&Arc::clone(&precomputed_rng_thread), 0), rng_range as usize,
+        let rngs = Arc::clone(&rngs_thread);
+
+        // If only one seed, precompute the RNG for it for fast visual display/lookup later
+        if rngs.len() == 1 {
+            let mut precomputed_rng = compute_precomputed_rng_thread.lock().unwrap();
+            *precomputed_rng = Some(rngs[0].clone().precompute(rng_range as usize + 10_000));
+            drop(precomputed_rng);
+        }
+
+        compute_snowball_search::thread_func(&rngs, rng_range as usize,
             Arc::clone(&compute_end_signal_thread), Arc::clone(&compute_perform_search_signal_thread), 
             Arc::clone(&compute_preload_completed_signal_thread), Arc::clone(&compute_parameters_thread), 
             Arc::clone(&compute_result_thread));
@@ -169,9 +197,15 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                         (placing_particle.x, placing_particle.y) = (f32::max(world_x, x_limit as f32), world_y);
                     }
                 },
-                Event::MouseButtonDown { mouse_btn: MouseButton::Right, .. } => {
+                Event::MouseButtonDown { mouse_btn: MouseButton::Middle, .. } => {
                     // Clear placed snowballs
                     placed_snowballs.clear();
+                },
+                Event::MouseButtonDown { mouse_btn: MouseButton::Right, .. } => {
+                    // Undo last snowball placed
+                    if !placed_snowballs.is_empty() {
+                        placed_snowballs.pop();
+                    }
                 }
                 _ => {}
             }
@@ -191,7 +225,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
 
             // Begin search
             *compute_parameters.lock().unwrap() = SnowballSearchParameters {
-                search_range: rng_range,
+                search_range: if rngs.len() == 1 { rng_range } else { rngs.len() as u32 },
                 matching_snowballs
             };
             compute_perform_search_signal.store(true, Ordering::Relaxed);
@@ -208,13 +242,31 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 // Singular match! Figure out past RNG...
                 println!("Matched position is {}", search_result.single_matched_position);
 
-                // Use precomputed RNG to get the step count from just before the match
-                let mut lprng = LinearPrecomputedRNG::new(&precomputed_rng, (search_result.single_matched_position - 1) as usize);
-                let step_count = f64::round_ties_even(lprng.next_f64(30.0)) as u32;
+                // Use precomputed RNG to get the step count from just before the match, and create visualization
+                let step_count: u32;
+                if rngs.len() == 1 {
+                    // Get RNG from single seed, at correct position
+                    let precomputed_rng = compute_precomputed_rng.lock().unwrap();
+                    let mut lprng = LinearPrecomputedRNG::new(precomputed_rng.as_ref().unwrap(), (search_result.single_matched_position - 1) as usize);
 
-                // Use the same precomputed RNG to simulate the snowballs for a visualization
-                snow_areas = SnowArea::new_array();
-                SnowArea::simulate_array(&mut snow_areas, &mut lprng);
+                    // Use precomputed RNG for step count
+                    step_count = f64::round_ties_even(lprng.next_f64(30.0)) as u32;
+
+                    // Use the same precomputed RNG to simulate the snowballs for a visualization
+                    snow_areas = SnowArea::new_array();
+                    SnowArea::simulate_array(&mut snow_areas, &mut lprng);
+                } else {
+                    // Get RNG from one of the seeds, at initial position (classic mode)
+                    let mut rng = rngs[search_result.single_matched_position as usize].clone();
+
+                    // Use regular RNG for step count
+                    _ = rng.next_u32();
+                    step_count = f64::round_ties_even(rng.next_f64(30.0)) as u32;
+
+                    // Use the same regular RNG to simulate the snowballs for a visualization
+                    snow_areas = SnowArea::new_array();
+                    SnowArea::simulate_array(&mut snow_areas, &mut rng);
+                }
                 show_visualization = true;
 
                 // Create instructions
@@ -286,7 +338,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
             _ = main_context.font.draw_text(
                 main_context, 
                 instructions.as_str(), 
-                screen_space.x_world_to_screen(16.0), screen_space.y_world_to_screen(128.0),
+                screen_space.x_world_to_screen(16.0), screen_space.y_world_to_screen(164.0),
                 0.0, 0.0,
                 0, 
                 screen_space.scale() * 2.0, 
@@ -296,7 +348,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
         // Draw hotkeys
         _ = main_context.font.draw_text_bg(
             main_context, 
-            &format!("[{}] - Screenshot & raise\n[{}] - Focus window", 
+            &format!("[{}] - Screenshot & raise\n[{}] - Focus window\n[LMB] - Place snowballs\n[RMB] - Undo a snowball\n[MMB] - Clear all snowballs", 
                           main_context.config.hotkey_1_name, main_context.config.hotkey_4_name), 
             screen_space.x_world_to_screen(8.0), screen_space.y_world_to_screen(8.0),
             0.0, 0.0,

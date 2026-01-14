@@ -105,6 +105,8 @@ pub struct MainContext<'a> {
 
     // Error message for when in the error sub-program
     pub error_message: &'static str,
+    pub error_return_to: SubProgram,
+    pub error_returning: bool,
 
     // Main run context
     pub run_context: RunContext
@@ -302,12 +304,17 @@ fn main() {
         server_connected,
         screenshot_data,
         error_message: "",
+        error_return_to: SubProgram::None,
+        error_returning: false,
         run_context: RunContext::new()
     };
 
     // Run sub-programs
     let mut program = SubProgram::ProgramSelector;
     'running: loop {
+        if program != SubProgram::Error {
+            main_context.error_return_to = SubProgram::None;
+        }
         program = match program {
             SubProgram::None => break 'running,
             SubProgram::ProgramSelector => program_selector::run(&mut main_context),
