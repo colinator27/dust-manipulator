@@ -427,7 +427,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
         // Draw hotkeys
         _ = main_context.font.draw_text_bg(
             main_context, 
-            &format!("[{}] - Screenshot\n[{}] - Raise window\n[{}] - {}\n[{}] - Focus window", 
+            &format!("[{}] - Screenshot\n[{}] - Raise window\n[{}] - {}\n[{}] - Focus window\n[LMB] - Drag & toggle pixels\n[RMB] - Switch views", 
                           main_context.config.hotkey_1_name, main_context.config.hotkey_2_name, 
                           main_context.config.hotkey_3_name,
                           if rng_just_found { "Progress to next tool" } else { "Begin search" },
