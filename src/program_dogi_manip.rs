@@ -123,6 +123,9 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
     // Instructions, once found
     let mut instructions: Option<String> = None;
 
+    // Whether to show an error message due to no patterns matching at all
+    let mut no_patterns_matching = false;
+
     // Begin main loop
     let mut event_pump = main_context.sdl_context.event_pump().unwrap();
     let mut world_texture = main_context.texture_creator
@@ -200,11 +203,17 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 Event::MouseButtonDown { mouse_btn: MouseButton::Middle, .. } => {
                     // Clear placed snowballs
                     placed_snowballs.clear();
+                    no_patterns_matching = false;
                 },
                 Event::MouseButtonDown { mouse_btn: MouseButton::Right, .. } => {
                     // Undo last snowball placed
                     if !placed_snowballs.is_empty() {
                         placed_snowballs.pop();
+
+                        // Get rid of text once too few to search
+                        if placed_snowballs.len() < num_to_click {
+                            no_patterns_matching = false;
+                        }
                     }
                 }
                 _ => {}
@@ -280,8 +289,15 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                         format!("Up/down {} time{}", times, if times != 1 { "s" } else { "" })
                     }
                 });
+
+                no_patterns_matching = false;
             } else {
                 println!("Match count = {}, data = {}", search_result.match_count, search_result.single_matched_position);
+
+                // Display extra message if no patterns matched at all...
+                if search_result.match_count == 0 {
+                    no_patterns_matching = true;
+                }
             }
         }
 
@@ -357,6 +373,18 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
             Color::RGB(255, 255, 255),
             Color::RGBA(0, 0, 0, 128),
             16.0);
+
+        // Draw text if no patterns matched at all
+        if no_patterns_matching {
+            _ = main_context.font.draw_text(
+                main_context, 
+                "No matching patterns found!", 
+                screen_space.x_world_to_screen(8.0), screen_space.y_world_to_screen(WORLD_HEIGHT as f32 - 32.0),
+                0.0, 1.0,
+                0, 
+                screen_space.scale(), 
+                Color::RGB(255, 0, 0));
+        }
         
         // Draw text if preloading is still happening
         if !compute_preload_completed_signal.load(Ordering::Relaxed) {
@@ -411,6 +439,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
             // Hide old stuff
             placed_snowballs.clear();
             show_visualization = false;
+            no_patterns_matching = false;
 
             // Get screenshot data
             let screenshot_data = &local_screenshot_data.pop().unwrap();
