@@ -820,5 +820,5 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
     }
 
     // Return to other programs
-    SubProgram::ProgramSelector
+    if main_context.config.auto_return_to_naming_search { SubProgram::NamingSeedSearch } else { SubProgram::ProgramSelector }
 }

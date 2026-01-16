@@ -59,5 +59,6 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
         frame_timer.end_and_sleep();
     }
 
-    SubProgram::ProgramSelector
+    main_context.error_return_to = SubProgram::None;
+    if main_context.config.auto_return_to_naming_search { SubProgram::NamingSeedSearch } else { SubProgram::ProgramSelector }
 }

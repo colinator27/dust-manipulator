@@ -75,6 +75,7 @@ pub struct Config {
     pub window_always_on_top: bool,
     pub window_unfocusable_by_default: bool,
     pub window_opacity: f32,
+    pub auto_return_to_naming_search: bool,
     pub snowball_immediate_place: bool,
     pub snowball_search_start_offset: u32,
     pub snowball_search_range: u32,
