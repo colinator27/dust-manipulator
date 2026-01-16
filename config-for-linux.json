@@ -7,6 +7,7 @@
     "hotkey_4_name": "F5",
     "mouse_warps": true,
     "window_always_on_top": false,
+    "window_unfocusable_by_default": false,
     "window_opacity": 1,
     "snowball_immediate_place": false,
     "snowball_search_start_offset": 0,

@@ -28,6 +28,7 @@ Currently unfinished and experimental code with some of its programs, but is cur
             * These are purely for visual display inside of the tool, and should be updated whenever the corresponding OBS hotkeys get changed.
         - `mouse_warps`: Set to `true` by default, which enables programs to warp the mouse to the tool window. Set to `false` to disable this behavior.
         - `window_always_on_top`: Set to `false` by default. If set to `true`, the tool window will always be placed on top of other windows, even if it loses focus. It can still be minimized.
+        - `window_unfocusable_by_default`: Set to `false` by default. If set to `true`, the tool window will be unfocusable by default. This means clicking on it will never focus the window, but manually focusing the window (e.g. via the system taskbar, or by using the "Focus window" hotkey) will still work. When the window is unfocused, keyboard inputs like Esc will not be registered in the tool.
         - `window_opacity`: Set to `1` by default. Often useful in conjunction with `window_always_on_top`, this sets the window opacity, if supported. Should be a number between 0 and 1.
         - `snowball_immediate_place`: Set to `false` by default. If set to `true`, snowballs will be immediately placed when clicking, rather than waiting for the click to be released.
         - `snowball_search_start_offset`: Set to `0` by default. If set higher, this will be the number of RNG calls that will be skipped before considering the valid range of snowball patterns.

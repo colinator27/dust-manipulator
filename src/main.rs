@@ -14,7 +14,7 @@ use sdl3_sys::{init::SDL_IsMainThread, messagebox::{SDL_MESSAGEBOX_ERROR, SDL_Sh
 use server::{MessageToSend, ScreenshotData};
 use text_rendering::Font;
 
-use crate::{program_common::SubProgram, windowing::window_set_always_on_top};
+use crate::{program_common::SubProgram, windowing::{window_set_always_on_top, window_set_focusable}};
 
 extern crate sdl3;
 
@@ -280,6 +280,11 @@ fn main() {
     if config.window_always_on_top {
         if !window_set_always_on_top(&mut window, true) {
             println!("Failed to set window to be always on top");
+        }
+    }
+    if config.window_unfocusable_by_default {
+        if !window_set_focusable(&mut window, false) {
+            println!("Failed to set window to be unfocusable");
         }
     }
     if config.window_opacity != 1.0 {

@@ -428,6 +428,9 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                     let window = main_context.canvas.window_mut();
                     window_set_focusable(window, true);
                     window.raise();
+                    if main_context.config.window_unfocusable_by_default {
+                        window_set_focusable(window, false);
+                    }
                 }
                 _ => {}
             }

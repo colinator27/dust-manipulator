@@ -73,6 +73,7 @@ pub struct Config {
     pub hotkey_4_name: String,
     pub mouse_warps: bool,
     pub window_always_on_top: bool,
+    pub window_unfocusable_by_default: bool,
     pub window_opacity: f32,
     pub snowball_immediate_place: bool,
     pub snowball_search_start_offset: u32,

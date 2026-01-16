@@ -772,7 +772,9 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
             if sdl3::timer::ticks() >= curr_raise_window_buffer_time {
                 focus_window_buffer_time = None;
 
-                window_set_focusable(main_context.canvas.window_mut(), true);
+                if !main_context.config.window_unfocusable_by_default {
+                    window_set_focusable(main_context.canvas.window_mut(), true);
+                }
             }
         }
 
