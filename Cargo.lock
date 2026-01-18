@@ -358,7 +358,7 @@ dependencies = [
 
 [[package]]
 name = "dust-manipulator"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "copy_to_output",
  "defer-rs",

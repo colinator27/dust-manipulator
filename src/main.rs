@@ -112,15 +112,22 @@ pub struct MainContext<'a> {
     pub run_context: RunContext
 }
 impl MainContext<'_> {
-    pub fn ignore_server_messages(&mut self) {
-        // Ignore all incoming hotkeys
-        for _ in self.hotkey_receiver.try_iter() {
+    // Ignores messages, but returns whether a reset hotkey was pressed or not
+    pub fn ignore_server_messages_except_reset(&mut self) -> bool {
+        // Ignore all incoming hotkeys, except resets
+        let mut reset = false;
+        for hotkey in self.hotkey_receiver.try_iter() {
+            if hotkey == 4 {
+                reset = true;
+            }
         }
 
         // Ignore all incoming screenshots
         let mut screenshot_data = self.screenshot_data.lock().unwrap();
         screenshot_data.clear();
         drop(screenshot_data);
+
+        reset
     }
 }
 

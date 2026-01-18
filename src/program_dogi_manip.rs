@@ -432,6 +432,11 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                         window_set_focusable(window, false);
                     }
                 }
+                4 => {
+                    // Reset run
+                    main_context.run_context.reset();
+                    return main_context.config.reset_return_to;
+                }
                 _ => {}
             }
         }

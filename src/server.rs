@@ -22,6 +22,7 @@ const MESSAGE_CODE_HOTKEY_1: u32 = 0x55548000;
 const MESSAGE_CODE_HOTKEY_2: u32 = 0x55548001;
 const MESSAGE_CODE_HOTKEY_3: u32 = 0x55548002;
 const MESSAGE_CODE_HOTKEY_4: u32 = 0x55548003;
+const MESSAGE_CODE_HOTKEY_5: u32 = 0x55548004;
 
 #[derive(Clone)]
 pub struct ScreenshotData {
@@ -170,6 +171,9 @@ pub fn run_server(config: &Config, end_signal: Arc<AtomicBool>, connected: Arc<A
                             },
                             MESSAGE_CODE_HOTKEY_4 => {
                                 _ = hotkey_sender.send(3);
+                            },
+                            MESSAGE_CODE_HOTKEY_5 => {
+                                _ = hotkey_sender.send(4);
                             },
                             MESSAGE_CODE_SCREENSHOT => {
                                 if !got_hello {

@@ -9,6 +9,7 @@
     "window_always_on_top": false,
     "window_unfocusable_by_default": false,
     "window_opacity": 1,
+    "reset_return_to": "NamingSeedSearch",
     "auto_return_to_naming_search": false,
     "snowball_immediate_place": false,
     "snowball_search_start_offset": 0,

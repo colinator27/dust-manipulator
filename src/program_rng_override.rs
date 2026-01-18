@@ -99,8 +99,11 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
         // Present latest canvas
         main_context.canvas.present();
 
-        // Ignore any server messages
-        main_context.ignore_server_messages();
+        // Ignore any server messages, except resets
+        if main_context.ignore_server_messages_except_reset() {
+            main_context.run_context.reset();
+            return main_context.config.reset_return_to;
+        }
         
         // Sleep until next frame
         frame_timer.end_and_sleep();
