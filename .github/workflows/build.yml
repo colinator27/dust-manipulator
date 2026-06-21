@@ -26,6 +26,7 @@ jobs:
         check_artifacts: true
         name: SDL3_shadercross-VC-x64
         workflow: main.yml
+        workflow_conclusion: ""
     - name: Build shaders
       shell: cmd
       run: |
@@ -65,6 +66,7 @@ jobs:
         check_artifacts: true
         name: SDL3_shadercross-linux-x64
         workflow: main.yml
+        workflow_conclusion: ""
     - name: Build shaders
       shell: bash
       run: |
