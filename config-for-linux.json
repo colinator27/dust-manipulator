@@ -45,5 +45,8 @@
                 "h": 130
             }
         }
-    ]
+    ],
+    "dust_screenshot_start_early_frames": 2,
+    "dust_screenshot_spare_time_frames": 40,
+    "dust_screenshot_preview_scale": 0.2
 }

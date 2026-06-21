@@ -25,7 +25,7 @@ impl TTFContext {
         })
     }
     
-    pub fn load_font(&self, path: &str, size: f32) -> Result<Font, &'static str> {
+    pub fn load_font(&self, path: &str, size: f32) -> Result<Font<'_>, &'static str> {
         let font = unsafe { ttf::TTF_OpenFont(CString::new(util::get_exe_directory().join(path).to_str().unwrap()).unwrap().as_ptr(), size) };
         if font.is_null() {
             return Err("Failed to open file data as a font");
@@ -51,7 +51,7 @@ pub struct Font<'a> {
     _marker: PhantomData<&'a TTFContext>
 }
 impl Font<'_> {
-    pub fn render_text(&self, text: &str, color: Color) -> Result<Surface, &'static str> {
+    pub fn render_text(&self, text: &str, color: Color) -> Result<Surface<'_>, &'static str> {
         let text = unsafe { ttf::TTF_RenderText_Solid_Wrapped(self.ptr, CString::new(text).unwrap().as_ptr(), text.len(), SDL_Color {
             r: color.r, g: color.g, b: color.b, a: color.a
         }, 0) };
@@ -61,7 +61,7 @@ impl Font<'_> {
             Ok(unsafe { Surface::from_ll(text) })
         }
     }
-    pub fn render_text_autowrap(&self, text: &str, color: Color, wrap_length: i32) -> Result<Surface, &'static str> {
+    pub fn render_text_autowrap(&self, text: &str, color: Color, wrap_length: i32) -> Result<Surface<'_>, &'static str> {
         let text = unsafe { ttf::TTF_RenderText_Solid_Wrapped(self.ptr, CString::new(text).unwrap().as_ptr(), text.len(), SDL_Color {
             r: color.r, g: color.g, b: color.b, a: color.a
         }, wrap_length) };

@@ -11,6 +11,7 @@
             "cargo": {
                 "args": [
                     "build",
+                    "--all-features",
                     "--bin=dust-manipulator",
                     "--package=dust-manipulator"
                 ],

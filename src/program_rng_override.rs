@@ -44,14 +44,27 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                         break 'running;
                     }
                     if typed_string.len() > 0 {
-                        main_context.run_context.set_rng(typed_string.parse::<u32>().unwrap(), 0);
+                        let split_string: Vec<&str> = typed_string.split(';').collect();
+                        let desired_seed = match split_string[0].parse::<u32>() {
+                            Ok(val) => val,
+                            Err(_) => break
+                        };
+                        let desired_pos = if split_string.len() >= 2 { 
+                            match split_string[1].parse::<usize>() {
+                                Ok(val) => val,
+                                Err(_) => break
+                            }
+                        } else {
+                            0
+                        };
+                        main_context.run_context.set_rng(desired_seed, desired_pos);
                         break 'running;
                     } else {
                         reset_confirmation = true;
                     }
                 },
                 Event::KeyDown { keycode: Some(keycode), .. } => {
-                    if typed_string.len() >= 5 {
+                    if typed_string.len() >= 32 {
                         continue;
                     }
                     if reset_confirmation {
@@ -60,6 +73,9 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                     if (keycode as i32) >= (Keycode::_0 as i32) && (keycode as i32) <= (Keycode::_9 as i32) {
                         let digit = (keycode as i32) - (Keycode::_0 as i32);
                         typed_string += &digit.to_string();
+                    }
+                    else if (keycode as i32) == (Keycode::Semicolon as i32) && typed_string.len() > 0 && !typed_string.contains(';') {
+                        typed_string += ";";
                     }
                 },
                 _ => {}

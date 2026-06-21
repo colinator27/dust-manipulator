@@ -82,7 +82,10 @@ pub struct Config {
     pub snowball_search_range: u32,
     pub naming_advance_tool: SubProgram,
     pub naming_auto_advance_seconds: u32,
-    pub naming_rects: Vec<ConfigNamingRects>
+    pub naming_rects: Vec<ConfigNamingRects>,
+    pub dust_screenshot_start_early_frames: i32,
+    pub dust_screenshot_spare_time_frames: i32,
+    pub dust_screenshot_preview_scale: f32
 }
 impl Config {
     pub fn read() -> Result<Self, Error> {

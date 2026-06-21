@@ -1,10 +1,9 @@
 extern crate sdl3;
 
-use compute_dust_search::{DustSearchMode, DustSearchParameters, DustSearchResult};
+use compute_dust_search::{DustSearchMode, KillDustSearchParameters, DustSearchResult};
 use compute_shaders::PointU32;
 use defer_rs::defer;
 use encounter_data::{Battlegroup, Encounterer};
-use image::ImageReader;
 use manip_data::MANIP_SETUPS_CORE;
 use sdl3::mouse::MouseButton;
 use sdl3::pixels::PixelFormat;
@@ -24,11 +23,13 @@ use std::thread;
 use rng::RNG;
 use dust::{DustAnimation, DustSearchConfig};
 
+use crate::compute_dust_search::{DustSearchParameters, SpareDustSearchParameters};
+use crate::dust::{DustData, SPARE_RNG_LENGTH};
 use crate::windowing::window_set_focusable;
 use crate::program_common::{rect_from_texture, rect_to_frect, window_to_world, FrameTimer, ScreenSpace};
-use crate::rng::LinearRNG;
-use crate::server::MessageToSend;
-use crate::{compute_dust_search, compute_shaders, dust, encounter_data, frame_images, manip_data, windowing, program_common, rng, server, util, MainContext, SubProgram};
+use crate::rng::{self, LinearRNG};
+use crate::server::{self, MessageToSend};
+use crate::{MainContext, SubProgram, compute_dust_search, compute_shaders, dust, encounter_data, frame_images, manip_data, program_common, windowing};
 
 #[derive(Clone)]
 struct PlacedDustParticle {
@@ -46,13 +47,26 @@ impl PlacedDustParticle {
             h: 2.0
         });
     }
+    pub fn draw_spare(&self, texture_canvas: &mut Canvas<Window>) {
+        _ = texture_canvas.draw_rect(FRect {
+            x: (self.x - 5) as f32,
+            y: (self.y - 5) as f32,
+            w: 10.0,
+            h: 10.0
+        });
+    }
 }
 
-struct DustFramePair<'a> {
+struct DustFramePreview<'a> {
     pub texture: Texture<'a>,
+    pub texture_secondary: Option<Texture<'a>>,
     pub rect: Rect,
-    pub first_frame_index: usize,
-    pub hovered: bool
+    pub rect_secondary: Option<Rect>,
+    pub frame_index: usize,
+    pub hovered: bool,
+    pub hovered_secondary: bool,
+    pub selected: bool,
+    pub selected_secondary: bool
 }
 
 #[derive(PartialEq)]
@@ -68,10 +82,17 @@ struct DustManipContext {
     pub search_mode: DustSearchMode
 }
 impl DustManipContext {
-    pub fn new(main_context: &MainContext, search_config: DustSearchConfig, search_mode: DustSearchMode) -> Self {
+    pub fn new(main_context: &MainContext, search_config: DustSearchConfig) -> Self {
         let mut res = DustManipContext {
-            search_config,
-            search_mode
+            search_mode: match &search_config.dust_data {
+                DustData::KillDustData(data) => {
+                    data.search_mode
+                },
+                DustData::SpareDustData(_) => {
+                    DustSearchMode::Spare
+                }
+            },
+            search_config
         };
         res.update_screenshot_delay_time(main_context);
         res
@@ -79,11 +100,23 @@ impl DustManipContext {
     pub fn update_screenshot_delay_time(&mut self, main_context: &MainContext) {
         // Instantiate the dust animation so we can figure out how many frames there are (for timing purposes)
         let animation: DustAnimation = self.search_config.dust_data.create_animation();
-        let num_frames_early = match self.search_mode {
-            DustSearchMode::LastFrame | DustSearchMode::LastFrameEarly => 1,
-            DustSearchMode::SecondToLastFrame | DustSearchMode::SecondToLastFrameEarly => 2
-        };
-        let time_in_frames = animation.get_length() - num_frames_early;
+        let mut time_in_frames;
+        match animation {
+            DustAnimation::KillDustAnimation(anim) => {
+                let num_frames_early = match self.search_mode {
+                    DustSearchMode::LastFrame | DustSearchMode::LastFrameEarly => 1,
+                    DustSearchMode::SecondToLastFrame | DustSearchMode::SecondToLastFrameEarly => 2,
+                    _ => panic!()
+                };
+                time_in_frames = anim.get_length() as i32 - num_frames_early as i32 - main_context.config.dust_screenshot_start_early_frames;
+            },
+            DustAnimation::SpareDustAnimation(_) => {
+                time_in_frames = main_context.config.dust_screenshot_spare_time_frames;
+            }
+        }
+        if time_in_frames < 0 {
+            time_in_frames = 0;
+        }
 
         // Send signal to client for the new delay time
         let new_delay_time = (time_in_frames as f32 * (1000.0 / 30.0)) as u32;
@@ -93,13 +126,18 @@ impl DustManipContext {
 
 const EXTRA_RAISE_DELAY_MS: u32 = 450;
 
-fn get_new_screenshot<'a>(texture_creator: &'a TextureCreator<WindowContext>, screenshot_data: &mut ScreenshotData, world_view: Rect, search_mode: DustSearchMode) -> Texture<'a> {
+fn get_new_screenshot<'a>(texture_creator: &'a TextureCreator<WindowContext>, screenshot_data: &mut ScreenshotData, world_view: Rect, search_mode: DustSearchMode, brighten: bool) -> Texture<'a> {
     // Preprocess image
     let mut cleaned_data: Vec<u8> = Vec::with_capacity((world_view.w * world_view.h * 4) as usize);
-    frame_images::clear_unwanted_pixels_dust(&mut cleaned_data, &screenshot_data, world_view, match search_mode {
-        DustSearchMode::LastFrame | DustSearchMode::SecondToLastFrame => false,
-        DustSearchMode::LastFrameEarly | DustSearchMode::SecondToLastFrameEarly => true
-    });
+    if search_mode != DustSearchMode::Spare {
+        frame_images::clear_unwanted_pixels_dust(&mut cleaned_data, &screenshot_data, world_view, match search_mode {
+            DustSearchMode::LastFrame | DustSearchMode::SecondToLastFrame => false,
+            DustSearchMode::LastFrameEarly | DustSearchMode::SecondToLastFrameEarly => true,
+            _ => panic!()
+        }, brighten);
+    } else {
+        frame_images::copy_pixels(&mut cleaned_data, &screenshot_data, world_view);
+    }
     
     // Create texture
     let surface = Surface::from_data(&mut cleaned_data, 
@@ -114,7 +152,14 @@ fn set_new_search_config(main_context: &MainContext, context: &mut DustManipCont
     context.search_config = new_config;
 
     // Update the current mode
-    context.search_mode = context.search_config.dust_data.search_mode;
+    context.search_mode = match &context.search_config.dust_data {
+        dust::DustData::KillDustData(data) => {
+            data.search_mode
+        },
+        dust::DustData::SpareDustData(_) => {
+            DustSearchMode::Spare
+        }
+    };
 
     // Update screenshot delay time
     context.update_screenshot_delay_time(main_context);
@@ -133,8 +178,8 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
     let mut curr_battlegroup: Battlegroup = battlegroup_order[0];
     let search_config: DustSearchConfig = curr_battlegroup.get_dust_config();
     //let search_config = encounter_data::get_debug_search_config();
-    let search_mode = search_config.dust_data.search_mode;
-    let mut context = DustManipContext::new(&main_context, search_config, search_mode);
+    let brighten = true;
+    let mut context = DustManipContext::new(&main_context, search_config);
     let num_to_click = 2;
     let mut battlegroup_order_pos = 0;
     let mut num_attacks: i32 = 1; // used to track # of attacks besides the last one
@@ -169,18 +214,9 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
     let compute_perform_search_signal = Arc::new(AtomicBool::new(false));
     let compute_perform_search_signal_thread = compute_perform_search_signal.clone();
     let prng_thread = prng.clone();
-    let compute_parameters = Arc::new(Mutex::new(DustSearchParameters {
-        search_mode: DustSearchMode::LastFrame,
-        search_range: 0,
-        last_frame_rng_offset: 0,
-        last_frame_particle_count: 0,
-        second_last_frame_particle_count: 0,
-        initial_rng_skip_amount: 0,
-        matching_particles: vec![],
-        initial_particles: vec![],
-    }));
+    let compute_parameters = Arc::new(Mutex::new(DustSearchParameters::None));
     let compute_parameters_thread = compute_parameters.clone();
-    let compute_result = Arc::new(Mutex::new(DustSearchResult { match_count: 0, single_matched_position: 0 }));
+    let compute_result = Arc::new(Mutex::new(DustSearchResult { match_count: 0, single_matched_position: 0, spare_frame_index: 0 }));
     let compute_result_thread = compute_result.clone();
     let compute_join_handle = thread::spawn(move || {
         compute_dust_search::thread_func(
@@ -208,11 +244,14 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
     let mut waiting_for_search_result = false;
 
     // Initialize frame pairs, loading the template image from the assets
-    let mut dust_search_frame_pairs: Vec<DustFramePair> = Vec::with_capacity(100);
-    let dust_search_frame_pair_image = 
-        ImageReader::open(util::get_exe_directory().join("./assets/dust_search_frame_pair.png"))
-            .expect("Failed to open image").decode().expect("Failed to decode image");
-    let dust_search_frame_pair_image_data = dust_search_frame_pair_image.to_rgba8().to_vec();
+    //let mut dust_search_frame_pairs: Vec<DustFramePreview> = Vec::with_capacity(100);
+    //let dust_search_frame_pair_image = 
+    //    ImageReader::open(util::get_exe_directory().join("./assets/dust_search_frame_pair.png"))
+    //        .expect("Failed to open image").decode().expect("Failed to decode image");
+    //let dust_search_frame_pair_image_data = dust_search_frame_pair_image.to_rgba8().to_vec();
+
+    // Initialize frame previews
+    let mut dust_search_frame_previews: Vec<DustFramePreview> = Vec::with_capacity(100);
 
     // Main state of the sub-program
     let mut dust_manip_state = DustManipState::Waiting;
@@ -261,24 +300,38 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 },
                 Event::KeyDown { keycode: Some(Keycode::Space), .. } => {
                     let mut new_debug_anim = context.search_config.dust_data.create_animation();
-                    let frame_end_offset: usize = match context.search_mode {
-                        DustSearchMode::LastFrame | DustSearchMode::LastFrameEarly => 1,
-                        DustSearchMode::SecondToLastFrame | DustSearchMode::SecondToLastFrameEarly => 2
-                    };
-                    let early_delay_offset: usize = match context.search_mode {
-                        DustSearchMode::LastFrame | DustSearchMode::SecondToLastFrame => 0,
-                        DustSearchMode::LastFrameEarly | DustSearchMode::SecondToLastFrameEarly => 1
-                    };
-
-                    new_debug_anim.set_start_process_frame(match context.search_mode {
-                        DustSearchMode::LastFrame | DustSearchMode::LastFrameEarly => new_debug_anim.get_frame_count() - 1,
-                        DustSearchMode::SecondToLastFrame | DustSearchMode::SecondToLastFrameEarly => new_debug_anim.get_frame_count() - 2
-                    });
                     let test_rng_position = 0;
-                    new_debug_anim.start_animating(&prng, test_rng_position);
+                    
+                    let mut total_num_updates: usize;
+                    match &mut new_debug_anim {
+                        DustAnimation::KillDustAnimation(anim) => {
+                            let frame_end_offset: usize = match context.search_mode {
+                                DustSearchMode::LastFrame | DustSearchMode::LastFrameEarly => 1,
+                                DustSearchMode::SecondToLastFrame | DustSearchMode::SecondToLastFrameEarly => 2,
+                                _ => panic!()
+                            };
+                            let early_delay_offset: usize = match context.search_mode {
+                                DustSearchMode::LastFrame | DustSearchMode::SecondToLastFrame => 0,
+                                DustSearchMode::LastFrameEarly | DustSearchMode::SecondToLastFrameEarly => 1,
+                                _ => panic!()
+                            };
 
+                            anim.set_start_process_frame(match context.search_mode {
+                                DustSearchMode::LastFrame | DustSearchMode::LastFrameEarly => anim.get_frame_count() - 1,
+                                DustSearchMode::SecondToLastFrame | DustSearchMode::SecondToLastFrameEarly => anim.get_frame_count() - 2,
+                                _ => panic!()
+                            });
+                            
+                            total_num_updates = (anim.get_length() - frame_end_offset) - early_delay_offset;
+                        },
+                        DustAnimation::SpareDustAnimation(_) => {
+                            total_num_updates = 0;
+                        }
+                    }
+
+                    new_debug_anim.start_animating(&prng, test_rng_position);
                     let mut num_updates = 0;
-                    while num_updates < ((new_debug_anim.get_length() - frame_end_offset) - early_delay_offset) {
+                    while num_updates < total_num_updates {
                         new_debug_anim.update();
                         num_updates += 1;
                     }
@@ -300,7 +353,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                             }
                             drop(selected_screenshot_texture);
                             selected_screenshot_texture = Some(get_new_screenshot(&main_context.texture_creator, &mut screenshots[selected_screenshot], 
-                                context.search_config.view_rect, context.search_mode));
+                                context.search_config.view_rect, context.search_mode, brighten));
                         }
                     }
                 },
@@ -310,7 +363,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                             selected_screenshot = (selected_screenshot + 1) % screenshots.len();
                             drop(selected_screenshot_texture);
                             selected_screenshot_texture = Some(get_new_screenshot(&main_context.texture_creator, &mut screenshots[selected_screenshot],
-                                context.search_config.view_rect, context.search_mode));
+                                context.search_config.view_rect, context.search_mode, brighten));
                         }
                     }
                 },
@@ -318,22 +371,39 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                     match dust_manip_state {
                         DustManipState::SelectingFrame => {
                             let (selector_x, selector_y) = window_to_world(x, y, Rect::new(0, 0, WORLD_WIDTH, WORLD_HEIGHT), screen_space.rect());
-                            for pair in dust_search_frame_pairs.iter_mut() {
-                                if pair.rect.contains_point(Point::new(selector_x, selector_y)) {
-                                    selected_screenshot = pair.first_frame_index;
-                                    drop(selected_screenshot_texture);
-                                    context.search_mode = context.search_mode.to_normal();
-                                    selected_screenshot_texture = Some(get_new_screenshot(&main_context.texture_creator, &mut screenshots[selected_screenshot], context.search_config.view_rect, context.search_mode));
-                                    dust_manip_state = DustManipState::PlacingParticles;
-                                    break;
+                            let p = Point::new(selector_x, selector_y);
+                            if context.search_mode == DustSearchMode::Spare {
+                                for preview in dust_search_frame_previews.iter_mut() {
+                                    if preview.rect.contains_point(p) {
+                                        preview.selected = preview.selected_secondary || !preview.selected;
+                                    }
+                                    
+                                    if let Some(rect_secondary) = &preview.rect_secondary {
+                                        if rect_secondary.contains_point(p) {
+                                            preview.selected_secondary = !preview.selected_secondary;
+                                            preview.selected = preview.selected_secondary;
+                                        }
+                                    }
+                                }
+                            } else {
+                                for preview in dust_search_frame_previews.iter_mut() {
+                                    if preview.rect.contains_point(p) {
+                                        selected_screenshot = preview.frame_index;
+                                        drop(selected_screenshot_texture);
+                                        context.search_mode = context.search_mode.to_normal();
+                                        selected_screenshot_texture = Some(get_new_screenshot(&main_context.texture_creator, &mut screenshots[selected_screenshot], context.search_config.view_rect, context.search_mode, brighten));
+                                        dust_manip_state = DustManipState::PlacingParticles;
+                                        break;
+                                    }
                                 }
                             }
                         },
                         DustManipState::PlacingParticles => {
                             let (world_x, world_y) = window_to_world(x, y, context.search_config.view_rect, screen_space.rect());
+                            let offset = if context.search_mode == DustSearchMode::Spare { 0 } else { 1 };
                             placing_particle = Some(PlacedDustParticle {
-                                x: world_x - 1,
-                                y: world_y - 1,
+                                x: world_x - offset,
+                                y: world_y - offset,
                                 xscale: 1
                             });
                         }
@@ -341,32 +411,68 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                     }
                 },
                 Event::MouseButtonUp { mouse_btn: MouseButton::Left, x, y, .. } => {
-                    if let Some(ref mut placing_particle) = placing_particle {
-                        // TODO: maybe allow for changing xscale somehow...
-                        let (world_x, world_y) = window_to_world(x, y, context.search_config.view_rect, screen_space.rect());
-                        (placing_particle.x, placing_particle.y) = (world_x - 1, world_y - 1);
-                        placed_particles.push(placing_particle.clone());
-
-                        if placed_particles.len() >= num_to_click {
-                            // Start searching now!
-                            queued_search = true;
+                    if dust_manip_state == DustManipState::SelectingFrame {
+                        if context.search_mode == DustSearchMode::Spare {
+                            let mut frame_index = usize::MAX;
+                            for preview in &dust_search_frame_previews {
+                                if preview.selected_secondary {
+                                    frame_index = preview.frame_index;
+                                }
+                            }
+                            if frame_index != usize::MAX {
+                                selected_screenshot = frame_index;
+                                drop(selected_screenshot_texture);
+                                selected_screenshot_texture = Some(get_new_screenshot(&main_context.texture_creator, &mut screenshots[selected_screenshot], context.search_config.view_rect, context.search_mode, brighten));
+                                dust_manip_state = DustManipState::PlacingParticles;
+                            }
                         }
+                    } else {
+                        if let Some(ref mut placing_particle) = placing_particle {
+                            // TODO: maybe allow for changing xscale somehow...
+                            let (world_x, world_y) = window_to_world(x, y, context.search_config.view_rect, screen_space.rect());
+                            let offset = if context.search_mode == DustSearchMode::Spare { 0 } else { 1 };
+                            (placing_particle.x, placing_particle.y) = (world_x - offset, world_y - offset);
+                            placed_particles.push(placing_particle.clone());
+
+                            if placed_particles.len() >= num_to_click {
+                                // Start searching now!
+                                queued_search = true;
+                            }
+                        }
+                        placing_particle = None;
                     }
-                    placing_particle = None;
                 },
                 Event::MouseMotion { mousestate, x, y, .. } => {
                     match dust_manip_state {
                         DustManipState::SelectingFrame => {
                             let (selector_x, selector_y) = window_to_world(x, y, Rect::new(0, 0, WORLD_WIDTH, WORLD_HEIGHT), screen_space.rect());
-                            for pair in dust_search_frame_pairs.iter_mut() {
-                                pair.hovered = pair.rect.contains_point(Point::new(selector_x, selector_y));
+                            let p = Point::new(selector_x, selector_y);
+                            for preview in dust_search_frame_previews.iter_mut() {
+                                let was_hovered = preview.hovered;
+                                preview.hovered = preview.rect.contains_point(p);
+
+                                if let Some(rect_secondary) = &preview.rect_secondary {
+                                    let was_hovered_secondary = preview.hovered_secondary;
+                                    preview.hovered_secondary = rect_secondary.contains_point(p);
+
+                                    if mousestate.left() {
+                                        if !was_hovered && preview.hovered {
+                                            preview.selected = preview.selected_secondary || !preview.selected;
+                                        }
+                                        if !was_hovered_secondary && preview.hovered_secondary {
+                                            preview.selected_secondary = !preview.selected_secondary;
+                                            preview.selected = preview.selected_secondary;
+                                        }
+                                    }
+                                }
                             }
                         },
                         DustManipState::PlacingParticles => {
                             let (world_x, world_y) = window_to_world(x, y, context.search_config.view_rect, screen_space.rect());
+                            let offset = if context.search_mode == DustSearchMode::Spare { 0 } else { 1 };
                             hovering_particle = Some(PlacedDustParticle { 
-                                x: world_x - 1, 
-                                y: world_y - 1, 
+                                x: world_x - offset, 
+                                y: world_y - offset, 
                                 xscale: 1 
                             });
                             if !mousestate.left() {
@@ -374,7 +480,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                             }
                             if let Some(ref mut placing_particle) = placing_particle {
                                 // TODO: maybe allow for changing xscale somehow...
-                                (placing_particle.x, placing_particle.y) = (world_x - 1, world_y - 1);
+                                (placing_particle.x, placing_particle.y) = (world_x - offset, world_y - offset);
                             }
                         },
                         _ => {}
@@ -383,15 +489,22 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 Event::MouseButtonDown { mouse_btn: MouseButton::Right, x, y, .. } => {
                     match dust_manip_state {
                         DustManipState::SelectingFrame => {
-                            let (selector_x, selector_y) = window_to_world(x, y, Rect::new(0, 0, WORLD_WIDTH, WORLD_HEIGHT), screen_space.rect());
-                            for pair in dust_search_frame_pairs.iter_mut() {
-                                if pair.rect.contains_point(Point::new(selector_x, selector_y)) {
-                                    selected_screenshot = pair.first_frame_index;
-                                    drop(selected_screenshot_texture);
-                                    context.search_mode = context.search_mode.to_early();
-                                    selected_screenshot_texture = Some(get_new_screenshot(&main_context.texture_creator, &mut screenshots[selected_screenshot], context.search_config.view_rect, context.search_mode));
-                                    dust_manip_state = DustManipState::PlacingParticles;
-                                    break;
+                            if context.search_mode == DustSearchMode::Spare {
+                                for preview in dust_search_frame_previews.iter_mut() {
+                                    preview.selected = false;
+                                    preview.selected_secondary = false;
+                                }
+                            } else {
+                                let (selector_x, selector_y) = window_to_world(x, y, Rect::new(0, 0, WORLD_WIDTH, WORLD_HEIGHT), screen_space.rect());
+                                for preview in dust_search_frame_previews.iter_mut() {
+                                    if preview.rect.contains_point(Point::new(selector_x, selector_y)) {
+                                        selected_screenshot = preview.frame_index;
+                                        drop(selected_screenshot_texture);
+                                        context.search_mode = context.search_mode.to_early();
+                                        selected_screenshot_texture = Some(get_new_screenshot(&main_context.texture_creator, &mut screenshots[selected_screenshot], context.search_config.view_rect, context.search_mode, brighten));
+                                        dust_manip_state = DustManipState::PlacingParticles;
+                                        break;
+                                    }
                                 }
                             }
                         },
@@ -407,7 +520,12 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 Event::KeyDown { keycode: Some(Keycode::Backspace), .. } => {
                     if dust_manip_state == DustManipState::FoundPosition {
                         dust_manip_state = DustManipState::PlacingParticles;
-                        selected_screenshot_texture = Some(get_new_screenshot(&main_context.texture_creator, &mut screenshots[selected_screenshot], context.search_config.view_rect, context.search_mode));
+                        selected_screenshot_texture = Some(get_new_screenshot(&main_context.texture_creator, &mut screenshots[selected_screenshot], context.search_config.view_rect, context.search_mode, brighten));
+                    } else if dust_manip_state == DustManipState::PlacingParticles {
+                        dust_manip_state = DustManipState::SelectingFrame;
+                        placed_particles.clear();
+                        placing_particle = None;
+                        selected_screenshot_texture = None;
                     }
                 },
                 Event::KeyDown { keycode: Some(Keycode::Return), .. } => {
@@ -425,15 +543,90 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 let search_result = compute_result.lock().unwrap();
                 if search_result.match_count == 1 {
                     // Singular match! Predict future RNG...
-                    let predicted_pos = search_result.single_matched_position as usize + search_anim.get_after_battle_rng_calls(match leveled_up {
-                        true => context.search_config.text_length_lvup,
-                        false => context.search_config.text_length
-                    });
-                    if battlegroup_order_pos < battlegroup_order.len() - 1 {
-                        battlegroup_order_pos += 1;
-                    }
-                    println!("Matched position is {}", search_result.single_matched_position);
+                    let predicted_pos = match search_anim {
+                        DustAnimation::KillDustAnimation(anim) => {
+                            let predicted_pos = search_result.single_matched_position as usize + anim.get_after_battle_rng_calls(match leveled_up {
+                                true => context.search_config.text_length_lvup,
+                                false => context.search_config.text_length
+                            });
+                            if battlegroup_order_pos < battlegroup_order.len() - 1 {
+                                battlegroup_order_pos += 1;
+                            }
+                            println!("Matched position is {}", search_result.single_matched_position);
+
+                            predicted_pos
+                        },
+                        DustAnimation::SpareDustAnimation(_) => {
+                            println!("Matched position is {}, frame index {}", search_result.single_matched_position, search_result.spare_frame_index);
+
+                            // Try to predict position...
+                            let mut predicted_pos = 
+                                search_result.single_matched_position +
+                                SPARE_RNG_LENGTH as u32;
+
+                            // Calculate unskipped and skipped frame counts
+                            let mut unskipped_frame_count = 0;
+                            let mut skipped_frame_count = 0;
+                            for preview in &dust_search_frame_previews {
+                                if preview.selected_secondary {
+                                    skipped_frame_count += 1;
+                                } else if preview.selected {
+                                    unskipped_frame_count += 1;
+                                }
+                            }
+
+                            // If frame counts don't add up, we have a problem...
+                            let total_unchecked_frame_count = unskipped_frame_count + skipped_frame_count;
+                            let total_expected_frame_count = search_result.spare_frame_index + 1;
+                            if total_unchecked_frame_count != total_expected_frame_count {
+                                println!("Mismatch of frame counts! Difference = {}", total_unchecked_frame_count as i32 - total_expected_frame_count as i32);
+                                if total_unchecked_frame_count > total_expected_frame_count {
+                                    // Assume extra frames at the end, if possible...
+                                    // If not possible, assume extra frames at the beginning...
+                                    let adjustment = total_unchecked_frame_count - total_expected_frame_count;
+                                    if skipped_frame_count > adjustment {
+                                        println!("Assuming {} extra skipped frames, removing", adjustment);
+                                        skipped_frame_count -= adjustment;
+                                    } else if unskipped_frame_count > adjustment {
+                                        println!("Assuming {} extra unskipped frames, removing", adjustment);
+                                        unskipped_frame_count -= adjustment;
+                                    } else {
+                                        println!("Assuming some combination of skipped and unskipped... Removing skipped first");
+                                        let mut remaining_adjustment = adjustment;
+                                        while skipped_frame_count > 1 && remaining_adjustment > 0 {
+                                            skipped_frame_count -= 1;
+                                            remaining_adjustment -= 1;
+                                        }
+                                        while unskipped_frame_count > 1 && remaining_adjustment > 0 {
+                                            unskipped_frame_count -= 1;
+                                            remaining_adjustment -= 1;
+                                        }
+                                    }
+                                } else {
+                                    // Assume missing frames at the beginning
+                                    let adjustment = total_expected_frame_count - total_unchecked_frame_count;
+                                    println!("Assuming {} missing unskipped frames, adding", adjustment);
+                                    unskipped_frame_count += adjustment;
+                                }
+                            }
+
+                            // Add unskipped text RNG
+                            for i in 0..unskipped_frame_count {
+                                predicted_pos += i * 2;
+                            }
+                            
+                            // Add skipped text RNG
+                            predicted_pos += skipped_frame_count * 2 * match leveled_up {
+                                true => (context.search_config.text_length_lvup - 2) as u32,
+                                false => (context.search_config.text_length - 2) as u32
+                            };
+
+                            predicted_pos as usize
+                        }
+                    };
+                    
                     println!("Predicted position is {}", predicted_pos);
+
                     //for i in 0..4 {
                     //    println!("RNG value {} is {}", i, prng.get_f64(100.0, predicted_pos + i));
                     //    println!("Encounter {} is {}", i, Encounterer::Core.get_battlegroup_at_pos(&prng, predicted_pos + i).get_name());
@@ -452,6 +645,14 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                     }
                     dust_manip_string = Some(str);
                     */
+                    println!("[{}] Current destined encounter: {}", curr_encounterer.get_name(), curr_encounterer.get_battlegroup_at_pos(&prng, predicted_pos + 1).get_name());
+                    println!("[{}] Room change destined encounter: {}", curr_encounterer.get_name(), curr_encounterer.get_battlegroup_at_pos(&prng, predicted_pos + 2).get_name());
+                    let kills_before_battle = 0;
+                    let new_kill_count = kills_before_battle + context.search_config.kill_count;
+                    let step_count = curr_encounterer.get_step_count_room_start(&prng, predicted_pos, new_kill_count);
+                    println!("[{}] Room change step count: {}", curr_encounterer.get_name(), step_count);
+                    println!("[{}] Room change step count (in seconds): {}", curr_encounterer.get_name(), step_count / 30.0);
+
                     for setup in MANIP_SETUPS_CORE {
                         let bg = curr_encounterer.get_battlegroup_at_pos(&prng, predicted_pos + 3 + setup.rng_amount);
                         if bg == battlegroup_order[battlegroup_order_pos] {
@@ -509,7 +710,7 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                     set_new_search_config(main_context, &mut context, curr_battlegroup.get_dust_config());
                     if selected_screenshot < screenshots.len() {
                         drop(selected_screenshot_texture);
-                        selected_screenshot_texture = Some(get_new_screenshot(&main_context.texture_creator, &mut screenshots[selected_screenshot], context.search_config.view_rect, context.search_mode));
+                        selected_screenshot_texture = Some(get_new_screenshot(&main_context.texture_creator, &mut screenshots[selected_screenshot], context.search_config.view_rect, context.search_mode, brighten));
                     }
                 }
                 3 => {
@@ -545,73 +746,96 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
             let mut initial_particles_last_frame_count = 0;
             let mut initial_particles_second_last_frame_count = 0;
 
+            let slide_amount: i16 = if context.search_config.slides_left { num_attacks as i16 } else { 0 };
+
             let mut new_search_anim = context.search_config.dust_data.create_animation();
-            new_search_anim.compute_frame_rng_offsets();
-            for particle in new_search_anim.get_frames().last().unwrap().iter() {
-                initial_particles.push(PointU32::new(particle.get_x() as i16 - (num_attacks as i16), particle.get_y() as i16));
-                initial_particles_last_frame_count += 1;
-            }
-            match context.search_mode {
-                DustSearchMode::SecondToLastFrame | DustSearchMode::SecondToLastFrameEarly => {
-                    for particle in new_search_anim.get_frames().get(new_search_anim.get_frame_count() - 2).unwrap().iter() {
-                        initial_particles.push(PointU32::new(particle.get_x() as i16 - (num_attacks as i16), particle.get_y() as i16));
-                        initial_particles_second_last_frame_count += 1;
+            match &mut new_search_anim {
+                DustAnimation::KillDustAnimation(anim) => {
+                    anim.compute_frame_rng_offsets();
+                    for particle in anim.get_frames().last().unwrap().iter() {
+                        initial_particles.push(PointU32::new(particle.get_x() as i16 - slide_amount, particle.get_y() as i16));
+                        initial_particles_last_frame_count += 1;
                     }
-                }
-                DustSearchMode::LastFrame | DustSearchMode::LastFrameEarly => {}
-            }
+                    match context.search_mode {
+                        DustSearchMode::SecondToLastFrame | DustSearchMode::SecondToLastFrameEarly => {
+                            for particle in anim.get_frames().get(anim.get_frame_count() - 2).unwrap().iter() {
+                                initial_particles.push(PointU32::new(particle.get_x() as i16 - slide_amount, particle.get_y() as i16));
+                                initial_particles_second_last_frame_count += 1;
+                            }
+                        }
+                        DustSearchMode::LastFrame | DustSearchMode::LastFrameEarly => {},
+                        _ => panic!()
+                    }
 
-            let matching_particles: Vec<PointU32> = placed_particles.iter().map(|p| PointU32::new(p.x as i16, p.y as i16)).collect();
+                    let matching_particles: Vec<PointU32> = placed_particles.iter().map(|p| PointU32::new(p.x as i16, p.y as i16)).collect();
 
-            /*
-            if let Some(debug_anim) = &debug_anim {
-                for particle in debug_anim.get_frames().last().unwrap().iter() {
-                    println!("Actual matching particle at ({}, {}) rounded from ({}, {})",
-                        f32::round(particle.get_x() - num_attacks as f32 - (1.0 / 512.0)) as i16, f32::round(particle.get_y() - (1.0 / 512.0)) as i16, particle.get_x() - num_attacks as f32, particle.get_y());
-                }
-                assert!(new_search_anim.get_frame_rng_offset(new_search_anim.get_frame_count() - 1) == debug_anim.get_frame_rng_offset(debug_anim.get_frame_count() - 1));
-                match context.search_mode {
-                    DustSearchMode::SecondToLastFrame | DustSearchMode::SecondToLastFrameEarly => {
-                        for particle in debug_anim.get_frames().get(debug_anim.get_frame_count() - 2).unwrap().iter() {
+                    /*
+                    if let Some(debug_anim) = &debug_anim {
+                        for particle in debug_anim.get_frames().last().unwrap().iter() {
                             println!("Actual matching particle at ({}, {}) rounded from ({}, {})",
                                 f32::round(particle.get_x() - num_attacks as f32 - (1.0 / 512.0)) as i16, f32::round(particle.get_y() - (1.0 / 512.0)) as i16, particle.get_x() - num_attacks as f32, particle.get_y());
                         }
+                        assert!(new_search_anim.get_frame_rng_offset(new_search_anim.get_frame_count() - 1) == debug_anim.get_frame_rng_offset(debug_anim.get_frame_count() - 1));
+                        match context.search_mode {
+                            DustSearchMode::SecondToLastFrame | DustSearchMode::SecondToLastFrameEarly => {
+                                for particle in debug_anim.get_frames().get(debug_anim.get_frame_count() - 2).unwrap().iter() {
+                                    println!("Actual matching particle at ({}, {}) rounded from ({}, {})",
+                                        f32::round(particle.get_x() - num_attacks as f32 - (1.0 / 512.0)) as i16, f32::round(particle.get_y() - (1.0 / 512.0)) as i16, particle.get_x() - num_attacks as f32, particle.get_y());
+                                }
 
-                        assert!(new_search_anim.get_frame_rng_offset(new_search_anim.get_frame_count() - 2) == debug_anim.get_frame_rng_offset(debug_anim.get_frame_count() - 2));
-                        println!("second to last frame rng offset is {}", new_search_anim.get_frame_rng_offset(new_search_anim.get_frame_count() - 2) as u32);
+                                assert!(new_search_anim.get_frame_rng_offset(new_search_anim.get_frame_count() - 2) == debug_anim.get_frame_rng_offset(debug_anim.get_frame_count() - 2));
+                                println!("second to last frame rng offset is {}", new_search_anim.get_frame_rng_offset(new_search_anim.get_frame_count() - 2) as u32);
+                            }
+                            DustSearchMode::LastFrame | DustSearchMode::LastFrameEarly => {}
+                        }
                     }
-                    DustSearchMode::LastFrame | DustSearchMode::LastFrameEarly => {}
+                    for p in &matching_particles {
+                        println!("Matching particle is at ({}, {})", p.get_x(), p.get_y());
+                    }
+                    */
+
+                    let frame_end_offset: usize = match context.search_mode {
+                        DustSearchMode::LastFrame | DustSearchMode::LastFrameEarly => 1,
+                        DustSearchMode::SecondToLastFrame | DustSearchMode::SecondToLastFrameEarly => 2,
+                        _ => panic!()
+                    };
+                    let initial_rng_skip_amount: u32 = 2 * (anim.get_frame_count() - frame_end_offset) as u32;
+
+                    if frame_end_offset == 2 {
+                        //println!("RNG skip amount between last two frames = {}", initial_rng_skip_amount);
+                        //println!("expected second to last RNG frame offset = {}", new_search_anim.get_frame_rng_offset(new_search_anim.get_frame_count() - 2));
+                        //println!("actual second to last RNG frame offset = {}", new_search_anim.get_frame_rng_offset(new_search_anim.get_frame_count() - 1) as u32 - ((initial_particles_second_last_frame_count * 2) + initial_rng_skip_amount));
+                        assert!(anim.get_frame_rng_offset(anim.get_frame_count() - 1) as u32 - ((initial_particles_second_last_frame_count * 2) + initial_rng_skip_amount) ==
+                                anim.get_frame_rng_offset(anim.get_frame_count() - 2) as u32);
+                    }
+
+                    *compute_parameters.lock().unwrap() = DustSearchParameters::KillDustSearchParameters(KillDustSearchParameters {
+                        search_range: (num_to_compute - anim.get_total_rng_calls() - 10_000) as u32,
+                        last_frame_rng_offset: anim.get_frame_rng_offset(anim.get_frame_count() - 1) as u32,
+                        matching_particles,
+                        initial_particles: initial_particles.clone(),
+                        last_frame_particle_count: initial_particles_last_frame_count,
+                        second_last_frame_particle_count: initial_particles_second_last_frame_count,
+                        initial_rng_skip_amount,
+                        search_mode: context.search_mode
+                    });
+                },
+                DustAnimation::SpareDustAnimation(anim) => {
+                    // if let Some(DustAnimation::SpareDustAnimation(debug_anim)) = &debug_anim {
+                    //     for particle in &debug_anim.particles {
+                    //         println!("Actual particle at ({}, {})", particle.x, particle.y);
+                    //     }
+                    // }
+
+                    let matching_particles: Vec<PointU32> = placed_particles.iter().map(|p| PointU32::new(p.x as i16, p.y as i16)).collect();
+                    *compute_parameters.lock().unwrap() = DustSearchParameters::SpareDustSearchParameters(SpareDustSearchParameters {
+                        search_range: num_to_compute as u32,
+                        anim_position: PointU32::new(anim.dust_data.x as i16, anim.dust_data.y as i16),
+                        anim_size: PointU32::new(anim.dust_data.sprite_width as i16, anim.dust_data.sprite_height as i16),
+                        matching_particles
+                    });
                 }
             }
-            for p in &matching_particles {
-                println!("Matching particle is at ({}, {})", p.get_x(), p.get_y());
-            }
-            */
-
-            let frame_end_offset: usize = match context.search_mode {
-                DustSearchMode::LastFrame | DustSearchMode::LastFrameEarly => 1,
-                DustSearchMode::SecondToLastFrame | DustSearchMode::SecondToLastFrameEarly => 2
-            };
-            let initial_rng_skip_amount: u32 = 2 * (new_search_anim.get_frame_count() - frame_end_offset) as u32;
-
-            if frame_end_offset == 2 {
-                //println!("RNG skip amount between last two frames = {}", initial_rng_skip_amount);
-                //println!("expected second to last RNG frame offset = {}", new_search_anim.get_frame_rng_offset(new_search_anim.get_frame_count() - 2));
-                //println!("actual second to last RNG frame offset = {}", new_search_anim.get_frame_rng_offset(new_search_anim.get_frame_count() - 1) as u32 - ((initial_particles_second_last_frame_count * 2) + initial_rng_skip_amount));
-                assert!(new_search_anim.get_frame_rng_offset(new_search_anim.get_frame_count() - 1) as u32 - ((initial_particles_second_last_frame_count * 2) + initial_rng_skip_amount) ==
-                        new_search_anim.get_frame_rng_offset(new_search_anim.get_frame_count() - 2) as u32);
-            }
-
-            *compute_parameters.lock().unwrap() = DustSearchParameters {
-                search_range: (num_to_compute - new_search_anim.get_total_rng_calls() - 10_000) as u32,
-                last_frame_rng_offset: new_search_anim.get_frame_rng_offset(new_search_anim.get_frame_count() - 1) as u32,
-                matching_particles,
-                initial_particles: initial_particles.clone(),
-                last_frame_particle_count: initial_particles_last_frame_count,
-                second_last_frame_particle_count: initial_particles_second_last_frame_count,
-                initial_rng_skip_amount,
-                search_mode: context.search_mode
-            };
 
             search_anim = Some(new_search_anim);
             waiting_for_search_result = true;
@@ -630,43 +854,110 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
             // Clear old screenshot data, and any old frame pair textures
             screenshots.clear();
             selected_screenshot_texture = None;
-            dust_search_frame_pairs.clear();
+            dust_search_frame_previews.clear();
 
             // Copy over screenshot data into our local vector, clearing out the shared vector with the server
             screenshots.append(&mut local_screenshot_data);
 
-            // Figure out positioning of the frame pair rectangles (in world space)
-            let frame_pairs_x = (WORLD_WIDTH as i32 / 2) - (((screenshots.len() - 1) as u32 * dust_search_frame_pair_image.width()) as f32 / 2.0) as i32;
-            let frame_pairs_y = (WORLD_HEIGHT as i32 / 2) - (dust_search_frame_pair_image.height() / 2) as i32;
-            let mut frame_pair_rect = Rect::new(frame_pairs_x, frame_pairs_y, dust_search_frame_pair_image.width(), dust_search_frame_pair_image.height());
+            // Display previews differently based on whether sparing or killing
+            match context.search_mode {
+                DustSearchMode::Spare => {
+                    // Figure out positioning of the frame preview rectangles (in world space)
+                    let preview_rect = context.search_config.view_rect;
+                    let preview_secondary_rect = Rect::new(41, 304, 39, 29);
+                    let frame_preview_scale = main_context.config.dust_screenshot_preview_scale;
+                    let frame_preview_width = ((preview_rect.w as f32) * frame_preview_scale) as u32;
+                    let frame_preview_single_height = ((preview_rect.h as f32) * frame_preview_scale) as u32;
+                    let frame_preview_total_height = frame_preview_single_height * 2;
+                    let frame_preview_x = (WORLD_WIDTH as i32 / 2) - (((screenshots.len() - 1) as u32 * frame_preview_width) as f32 / 2.0) as i32;
+                    let frame_preview_y = (WORLD_HEIGHT as i32 / 2) - (frame_preview_total_height / 2) as i32;
+                    let frame_preview_secondary_y = frame_preview_y + frame_preview_single_height as i32;
+                    let mut frame_preview_rect = Rect::new(frame_preview_x, frame_preview_y, frame_preview_width, frame_preview_single_height);
+                    let mut frame_preview_secondary_rect = Rect::new(frame_preview_x, frame_preview_secondary_y, frame_preview_width, frame_preview_single_height);
 
-            // Create frame pairs
-            let mut output_image: Vec<u8> = Vec::with_capacity(dust_search_frame_pair_image_data.len());
-            for i in 1..screenshots.len() {
-                let first_screenshot_data = &screenshots[i - 1];
-                let second_screenshot_data = &screenshots[i];
+                    // Create frame previews
+                    let mut output_image: Vec<u8> = Vec::with_capacity(preview_rect.w as usize * preview_rect.h as usize * 4);
+                    let mut output_secondary_image: Vec<u8> = Vec::with_capacity(preview_rect.w as usize * preview_rect.h as usize * 4);
+                    let mut i = 0;
+                    for screenshot_data in &screenshots {
+                        // Create preview images from screenshot
+                        frame_images::copy_pixels(&mut output_image, screenshot_data, preview_rect);
+                        frame_images::copy_pixels(&mut output_secondary_image, screenshot_data, preview_secondary_rect);
+                        let surface = Surface::from_data(&mut output_image, 
+                            preview_rect.w as u32, preview_rect.h as u32, preview_rect.w as u32 * 4, PixelFormat::RGBA32).unwrap();
+                        let mut texture = Texture::from_surface(&surface, &main_context.texture_creator).unwrap();
+                        texture.set_scale_mode(ScaleMode::Nearest);
+                        drop(surface);
+                        let surface_secondary = Surface::from_data(&mut output_secondary_image, 
+                            preview_secondary_rect.w as u32, preview_secondary_rect.h as u32, preview_secondary_rect.w as u32 * 4, PixelFormat::RGBA32).unwrap();
+                        let mut texture_secondary = Texture::from_surface(&surface_secondary, &main_context.texture_creator).unwrap();
+                        texture_secondary.set_scale_mode(ScaleMode::Nearest);
+                        drop(surface_secondary);
 
-                // Create image using two pixels/regions from each screenshot
-                frame_images::make_four_pixel(&dust_search_frame_pair_image_data, &mut output_image, 
-                                              first_screenshot_data, second_screenshot_data, 
-                                              &context.search_config.four_pixel_config);
-                let surface = Surface::from_data(&mut output_image, 
-                    dust_search_frame_pair_image.width(), dust_search_frame_pair_image.height(), dust_search_frame_pair_image.width() * 4, PixelFormat::RGBA32).unwrap();
-                let mut texture = Texture::from_surface(&surface, &main_context.texture_creator).unwrap();
-                texture.set_scale_mode(ScaleMode::Nearest);
-                drop(surface);
+                        // Add to list
+                        dust_search_frame_previews.push(DustFramePreview {
+                            texture,
+                            texture_secondary: Some(texture_secondary),
+                            rect: frame_preview_rect,
+                            rect_secondary: Some(frame_preview_secondary_rect),
+                            frame_index: i,
+                            hovered: false,
+                            hovered_secondary: false,
+                            selected: false,
+                            selected_secondary: false
+                        });
 
-                // Add to list
-                dust_search_frame_pairs.push(DustFramePair {
-                    texture,
-                    rect: frame_pair_rect,
-                    hovered: false,
-                    first_frame_index: i - 1
-                });
+                        // Move to the next frame's X coordinate, and clear output image contents
+                        frame_preview_rect.x += frame_preview_rect.w;
+                        frame_preview_secondary_rect.x += frame_preview_secondary_rect.w;
+                        output_image.clear();
+                        output_secondary_image.clear();
 
-                // Move to the next frame's X coordinate, and clear output image contents
-                frame_pair_rect.x += frame_pair_rect.w;
-                output_image.clear();
+                        i += 1;
+                    }
+                },
+                _ => {
+                    // Figure out positioning of the frame preview rectangles (in world space)
+                    let preview_rect = context.search_config.view_rect;
+                    let frame_preview_scale = main_context.config.dust_screenshot_preview_scale;
+                    let frame_preview_width = ((preview_rect.w as f32) * frame_preview_scale) as u32;
+                    let frame_preview_height = ((preview_rect.h as f32) * frame_preview_scale) as u32;
+                    let frame_preview_x = (WORLD_WIDTH as i32 / 2) - (((screenshots.len() - 1) as u32 * frame_preview_width) as f32 / 2.0) as i32;
+                    let frame_preview_y = (WORLD_HEIGHT as i32 / 2) - (frame_preview_height / 2) as i32;
+                    let mut frame_preview_rect = Rect::new(frame_preview_x, frame_preview_y, frame_preview_width, frame_preview_height);
+
+                    // Create frame previews
+                    let mut output_image: Vec<u8> = Vec::with_capacity(preview_rect.w as usize * preview_rect.h as usize * 4);
+                    let mut i = 0;
+                    for screenshot_data in &screenshots {
+                        // Create preview image from screenshot
+                        frame_images::copy_pixels(&mut output_image, screenshot_data, preview_rect);
+                        let surface = Surface::from_data(&mut output_image, 
+                            preview_rect.w as u32, preview_rect.h as u32, preview_rect.w as u32 * 4, PixelFormat::RGBA32).unwrap();
+                        let mut texture = Texture::from_surface(&surface, &main_context.texture_creator).unwrap();
+                        texture.set_scale_mode(ScaleMode::Nearest);
+                        drop(surface);
+
+                        // Add to list
+                        dust_search_frame_previews.push(DustFramePreview {
+                            texture,
+                            texture_secondary: None,
+                            rect: frame_preview_rect,
+                            rect_secondary: None,
+                            frame_index: i,
+                            hovered: false,
+                            hovered_secondary: false,
+                            selected: false,
+                            selected_secondary: false
+                        });
+
+                        // Move to the next frame's X coordinate, and clear output image contents
+                        frame_preview_rect.x += frame_preview_rect.w;
+                        output_image.clear();
+
+                        i += 1;
+                    }
+                }
             }
         }
         drop(local_screenshot_data);
@@ -690,18 +981,46 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                 _ = program_common::draw_connected_text(main_context, &screen_space, is_connected);
             },
             DustManipState::SelectingFrame => {
-                // Draw frame pair images
-                for pair in dust_search_frame_pairs.iter() {
-                    // Get correct screen space rectangle
-                    let transformed_rect = screen_space.rect_world_to_screen(pair.rect);
+                // Draw frame preview images
+                for preview in dust_search_frame_previews.iter() {
+                    if let Some(texture_secondary) = &preview.texture_secondary {
+                        // Get correct screen space rectangle
+                        let transformed_rect = screen_space.rect_world_to_screen(preview.rect);
+                        let transformed_secondary_rect = screen_space.rect_world_to_screen(preview.rect_secondary.unwrap());
 
-                    // Draw the texture
-                    _ = main_context.canvas.copy(&pair.texture, rect_from_texture(&pair.texture), transformed_rect);
+                        // Draw the texture
+                        _ = main_context.canvas.copy(&preview.texture, rect_from_texture(&preview.texture), transformed_rect);
+                        _ = main_context.canvas.copy(texture_secondary, rect_from_texture(texture_secondary), transformed_secondary_rect);
 
-                    // If currently hovered, draw a rectangle around the texture to indicate that
-                    if pair.hovered {
-                        main_context.canvas.set_draw_color(Color::RGBA(255, 255, 255, 64));
-                        _ = main_context.canvas.draw_rect(rect_to_frect(transformed_rect));
+                        // If currently hovered, draw a rectangle around the texture to indicate that
+                        if preview.hovered {
+                            main_context.canvas.set_draw_color(Color::RGBA(255, 255, 255, 64));
+                            _ = main_context.canvas.draw_rect(rect_to_frect(transformed_rect));
+                        }
+                        if preview.selected {
+                            main_context.canvas.set_draw_color(Color::RGBA(255, 0, 0, 64));
+                            _ = main_context.canvas.fill_rect(rect_to_frect(transformed_rect));
+                        }
+                        if preview.hovered_secondary {
+                            main_context.canvas.set_draw_color(Color::RGBA(255, 255, 255, 64));
+                            _ = main_context.canvas.draw_rect(rect_to_frect(transformed_secondary_rect));
+                        }
+                        if preview.selected_secondary {
+                            main_context.canvas.set_draw_color(Color::RGBA(255, 0, 0, 64));
+                            _ = main_context.canvas.fill_rect(rect_to_frect(transformed_secondary_rect));
+                        }
+                    } else {
+                        // Get correct screen space rectangle
+                        let transformed_rect = screen_space.rect_world_to_screen(preview.rect);
+
+                        // Draw the texture
+                        _ = main_context.canvas.copy(&preview.texture, rect_from_texture(&preview.texture), transformed_rect);
+
+                        // If currently hovered, draw a rectangle around the texture to indicate that
+                        if preview.hovered {
+                            main_context.canvas.set_draw_color(Color::RGBA(255, 255, 255, 64));
+                            _ = main_context.canvas.draw_rect(rect_to_frect(transformed_rect));
+                        }
                     }
                 }
             },
@@ -731,15 +1050,36 @@ pub fn run(main_context: &mut MainContext) -> SubProgram {
                     // Draw placed/placing particles
                     texture_canvas.set_draw_color(Color::RGBA(255, 0, 0, 255));
                     if let Some(placing_particle) = &placing_particle {
-                        placing_particle.draw(texture_canvas);
+                        match context.search_mode {
+                            DustSearchMode::Spare => {
+                                placing_particle.draw_spare(texture_canvas);
+                            },
+                            _ => {
+                                placing_particle.draw(texture_canvas);
+                            }
+                        }
                     }
                     texture_canvas.set_draw_color(Color::RGBA(128, 0, 0, 255));
                     for placed_particle in &placed_particles {
-                        placed_particle.draw(texture_canvas);
+                        match context.search_mode {
+                            DustSearchMode::Spare => {
+                                placed_particle.draw_spare(texture_canvas);
+                            },
+                            _ => {
+                                placed_particle.draw(texture_canvas);
+                            }
+                        }
                     }
                     texture_canvas.set_draw_color(Color::RGBA(255, 0, 0, 64));
                     if let Some(hovering_particle) = &hovering_particle {
-                        hovering_particle.draw(texture_canvas);
+                        match context.search_mode {
+                            DustSearchMode::Spare => {
+                                hovering_particle.draw_spare(texture_canvas);
+                            },
+                            _ => {
+                                hovering_particle.draw(texture_canvas);
+                            }
+                        }
                     }
                 }).expect("Failed to draw to texture canvas");
 
