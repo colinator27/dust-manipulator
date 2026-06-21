@@ -171,10 +171,10 @@ const WORLD_HEIGHT: u32 = 480;
 pub fn run(main_context: &mut MainContext) -> SubProgram {
     // Initialize dust manip state
     let battlegroup_order = [
-        Battlegroup::KnightKnight_Madjick,
-        Battlegroup::FinalFroggit_Astigmatism_Whimsalot
+        Battlegroup::Icecap_JerryS,
+        Battlegroup::Icecap_JerryS
     ];
-    let mut curr_encounterer: Encounterer = Encounterer::Core;
+    let mut curr_encounterer: Encounterer = Encounterer::Jerry;
     let mut curr_battlegroup: Battlegroup = battlegroup_order[0];
     let search_config: DustSearchConfig = curr_battlegroup.get_dust_config();
     //let search_config = encounter_data::get_debug_search_config();
