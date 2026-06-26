@@ -370,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "dust-manipulator"
-version = "1.3.0"
+version = "1.3.1"
 dependencies = [
  "const_format",
  "copy_to_output",
